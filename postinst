@@ -1,0 +1,149 @@
+#!/bin/bash
+# VCamPlus 安装/升级后处理: 注册 trustcache + 自动 respring
+# 目标: dpkg -i 装完即用(与 Sileo 安装行为一致), 无需手动 jb_ctl / killall
+
+DYLIB_NAME="VCamPlus.dylib"
+
+# ===== 防重打包校验(1.3.70) =====
+# CI 打包时由 build.yml 注入两个变量: SIG_HOLE_OFF(fat 文件内 arm64e slice
+# 洞的绝对偏移 hex) / SIG_HOLE_SHA(洞内期望 32B 哈希 hex)。
+# 校验落盘 dylib 的洞内容(魔数 + 哈希字节直接比对): 不符 = 被解包重改/
+# 魔改 → 拒绝安装(rm dylib + exit 1)。运行时 vcamSelfTextOK() 还有第二层
+# __TEXT 全段哈希校验(licMark 门禁) —— 即使绕过安装期校验, 魔改 dylib
+# 加载后门禁关闭。本地构建占位值 → 跳过(开发语义)。
+SIG_HOLE_OFF="__SIG_HOLE_OFF__"
+SIG_HOLE_SHA="__SIG_HOLE_SHA__"
+if [ -n "$SIG_HOLE_OFF" ] && [ "$SIG_HOLE_OFF" != "__SIG_HOLE_OFF__" ]; then
+    for d in /var/jb/Library/MobileSubstrate/DynamicLibraries /Library/MobileSubstrate/DynamicLibraries; do
+        if [ -f "$d/$DYLIB_NAME" ]; then
+            OK_SIG=1
+            GOT_MAGIC=$(dd if="$d/$DYLIB_NAME" bs=1 skip=$((16#$SIG_HOLE_OFF)) count=8 2>/dev/null | od -An -tx1 | tr -d ' \n')
+            if [ "$GOT_MAGIC" != "5643545853494731" ]; then
+                OK_SIG=0
+            fi
+            if [ "$OK_SIG" = "1" ]; then
+                GOT_TAIL=$(dd if="$d/$DYLIB_NAME" bs=1 skip=$((16#$SIG_HOLE_OFF + 8)) count=32 2>/dev/null | od -An -tx1 | tr -d ' \n')
+                if [ "$GOT_TAIL" != "$SIG_HOLE_SHA" ]; then
+                    OK_SIG=0
+                fi
+            fi
+            if [ "$OK_SIG" != "1" ]; then
+                echo "VCamPlus: integrity check FAILED (modified dylib), refusing install" >&2
+                rm -f "$d/$DYLIB_NAME" 2>/dev/null
+                exit 1
+            fi
+        fi
+    done
+fi
+
+# 依赖兜底(2026-08-17): dpkg -i 不解析 Depends(Sileo/apt 才解析排队),
+# ellekit 缺失时从已配置源自动补装 —— 与 Sileo 安装行为对齐。
+# 失败静默(源不可达等): tweak 的 hook 是自包含实现, 无 ellekit 也可工作
+if ! dpkg -s ellekit >/dev/null 2>&1; then
+    apt-get install -y ellekit >/dev/null 2>&1 || true
+fi
+
+# ===== 1.3.19 千面布局落位 + TweakInject 探测复制 =====
+# data.tar 只带 ./Library/MobileSubstrate/DynamicLibraries 条目(千面实证通用布局:
+# rootless 经 rootless-compat/bootstrap 重定向落 /var/jb/Library/...,
+# rootful 直写 /Library/...)。SE2 实证 /var/jb/usr/lib/TweakInject 链路破损,
+# dpkg 直写必失败 —— TweakInject 副本(ellekit-only 设备的加载点)改由此处探测
+# 写入: 目录可写才复制, 破损路径安全跳过; roothide patchloader 设备直接用
+# DynamicLibraries 正本。双路径双加载由 Tweak.m vcam_loaded_via_other_path 兜底。
+DL_DIR=""
+for d in /var/jb/Library/MobileSubstrate/DynamicLibraries /Library/MobileSubstrate/DynamicLibraries; do
+    if [ -f "$d/$DYLIB_NAME" ]; then DL_DIR="$d"; break; fi
+done
+TI_DIR="/var/jb/usr/lib/TweakInject"
+mkdir -p "$TI_DIR" 2>/dev/null || true
+if [ -n "$DL_DIR" ] && [ -d "$TI_DIR" ] && [ -w "$TI_DIR" ]; then
+    cp -f "$DL_DIR/$DYLIB_NAME" "$TI_DIR/$DYLIB_NAME" 2>/dev/null || true
+    cp -f "$DL_DIR/VCamPlus.plist" "$TI_DIR/VCamPlus.plist" 2>/dev/null || true
+fi
+
+# 自愈(1.3.22): 旧版(1.3.19~1.3.21) postrm 的无条件 rm 在升级场景会经
+# /var/jb 符号链接别名把刚解包的正本删掉 —— 正本缺失时从 apt 缓存里的
+# 本包 deb 重新提取(升级必经路径, Sileo/apt/dpkg -i 三种装法缓存都在)。
+DL_FINAL=""
+for d in /var/jb/Library/MobileSubstrate/DynamicLibraries /Library/MobileSubstrate/DynamicLibraries; do
+    [ -f "$d/$DYLIB_NAME" ] && DL_FINAL="$d" && break
+done
+if [ -z "$DL_FINAL" ]; then
+    DEB_CAND=$(ls -t /var/cache/apt/archives/com.vcam.plus_*.deb 2>/dev/null | head -1)
+    if [ -n "$DEB_CAND" ]; then
+        TMPX=$(mktemp -d 2>/dev/null || echo "/tmp/vcam_selfheal$$")
+        mkdir -p "$TMPX" 2>/dev/null || true
+        if dpkg-deb -x "$DEB_CAND" "$TMPX" 2>/dev/null; then
+            mkdir -p /Library/MobileSubstrate/DynamicLibraries 2>/dev/null || true
+            cp -f "$TMPX/Library/MobileSubstrate/DynamicLibraries/$DYLIB_NAME" \
+                  "/Library/MobileSubstrate/DynamicLibraries/$DYLIB_NAME" 2>/dev/null || true
+            cp -f "$TMPX/Library/MobileSubstrate/DynamicLibraries/VCamPlus.plist" \
+                  "/Library/MobileSubstrate/DynamicLibraries/VCamPlus.plist" 2>/dev/null || true
+        fi
+        rm -rf "$TMPX" 2>/dev/null || true
+    fi
+fi
+
+# RootHide Bootstrap: fakesign 二进制必须进 trustcache 才能被注入加载。
+# 命令名修复(2026-08-17): 工具是 jbctl(无下划线, /usr/bin/jbctl -> ../../basebin/jbctl)。
+# 路径修复(2026-08-17 装完不替换根因): jbctl 是 basebin 工具, 只认物理路径
+# (实测 /var/jb/... 报 "path does not exist", 必须用 jbroot 输出的物理路径);
+# 且注册必须在 respring 前完成 —— 未注册就 respring 会触发 ellekit 自愈
+# 移除"不受信" dylib 并弹 "Ellekit files are corrupted"(设备实证)。
+# deb 布局已改为 usr/lib/TweakInject(ellekit 唯一扫描目录), 与此路径一致。
+JBCTL=""
+for cand in /usr/bin/jbctl "$(command -v jbctl 2>/dev/null)"; do
+    [ -n "$cand" ] && [ -x "$cand" ] && JBCTL="$cand" && break
+done
+if [ -x /usr/bin/jbroot ] && [ -n "$JBCTL" ]; then
+    JR="$(/usr/bin/jbroot 2>/dev/null)"
+    JR="${JR%/}"
+    if [ -n "$JR" ] && [ "$JR" != "/" ] && [ -d "$JR" ]; then
+        if [ -f "$JR/usr/lib/TweakInject/$DYLIB_NAME" ]; then
+            "$JBCTL" trustcache add "$JR/usr/lib/TweakInject/$DYLIB_NAME" >/dev/null 2>&1 || true
+        fi
+        # 千面布局正本(./Library 重定向落点, 1.3.19 起为主安装位置)
+        [ -f "$JR/Library/MobileSubstrate/DynamicLibraries/$DYLIB_NAME" ] && \
+            "$JBCTL" trustcache add "$JR/Library/MobileSubstrate/DynamicLibraries/$DYLIB_NAME" >/dev/null 2>&1 || true
+    fi
+fi
+# rootful 直落点(/Library/..., 无 jbroot 体系)trustcache 兜底
+if [ -n "$JBCTL" ] && [ -f "/Library/MobileSubstrate/DynamicLibraries/$DYLIB_NAME" ]; then
+    "$JBCTL" trustcache add "/Library/MobileSubstrate/DynamicLibraries/$DYLIB_NAME" >/dev/null 2>&1 || true
+fi
+
+# 安装即替换(2026-08-17): VCamCore 读 vc.plist 的 enabled, 无 plist 时默认 NO
+# (全新设备装完必须手动点悬浮球"替")。此处新装时写默认开启配置 —— 已有 vc.plist
+# 绝不覆盖(保留用户 enabled/镜像/旋转/预设视频等全部设置)。
+# mediaserverd 经 pathhook 读 /var/mobile/Media/DCIM/, 越狱 shell 视角该目录在
+# /rootfs/private/var/ 下; 两路径都确保(存在哪个写哪个, 均无则建 rootfs 侧)
+VC_DIR_A="/rootfs/private/var/mobile/Media/DCIM"
+VC_DIR_B="/var/mobile/Media/DCIM"
+VC_DEFAULT='<?xml version="1.0" encoding="UTF-8"?><!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd"><plist version="1.0"><dict><key>activePlaybackPath</key><string>/var/mobile/Media/DCIM/vcam.mp4</string><key>adaptiveResolution</key><false/><key>enabled</key><true/><key>isLive</key><true/><key>manualRotation</key><integer>0</integer><key>mirrored</key><false/><key>paused</key><false/><key>restartToken</key><integer>0</integer></dict></plist>'
+for VC_DIR in "$VC_DIR_A" "$VC_DIR_B"; do
+    if [ -d "$VC_DIR" ]; then
+        if [ ! -f "$VC_DIR/vc.plist" ]; then
+            printf '%s' "$VC_DEFAULT" > "$VC_DIR/vc.plist" 2>/dev/null || true
+            chown mobile:mobile "$VC_DIR/vc.plist" 2>/dev/null || true
+        fi
+    fi
+done
+# 目录都不存在(极新环境): 建 rootfs 侧再写
+if [ ! -f "$VC_DIR_A/vc.plist" ] && [ ! -f "$VC_DIR_B/vc.plist" ]; then
+    mkdir -p "$VC_DIR_A" 2>/dev/null || true
+    printf '%s' "$VC_DEFAULT" > "$VC_DIR_A/vc.plist" 2>/dev/null || true
+    chown mobile:mobile "$VC_DIR_A/vc.plist" 2>/dev/null || true
+fi
+
+# respring 加载 tweak。
+# mediaserverd 必须显式重启(2026-08-19 设备实证): respring 只杀 SpringBoard,
+# mediaserverd 继续跑旧 dylib(帧计数器延续佐证) —— 升级后替换行为仍是旧代码,
+# 直到 msd 自然崩溃才加载新版。killall 后 launchd 自动拉起加载新 dylib。
+# 延迟加长到 5 秒(2026-08-18, 卸载事故复盘): postinst 返回后 dpkg 还需收尾
+# 写 status 数据库 + 跑 trigger, 慢设备上 2 秒不够; respring 过早会连带杀掉
+# Sileo/apt → dpkg 数据库写一半被中断 → ellekit 报 corrupted。
+# 5 秒且脱离会话执行: dpkg 事务完整收尾后再重启加载器。
+# Sileo 安装场景由 Sileo 自己 respring, 这里的 respring 供 dpkg -i 直装即用
+( sleep 5; /usr/bin/killall -9 mediaserverd 2>/dev/null; /usr/bin/killall -9 SpringBoard 2>/dev/null; ) >/dev/null 2>&1 &
+
+exit 0
