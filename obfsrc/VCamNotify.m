@@ -750,8 +750,13 @@ static NSString *qzPs(void) {
     // 旧格式(无 "." 段)fail-closed —— 验签消息升级为 设备码||T_enc
     NSArray *parts = [blob componentsSeparatedByString:obfN(380)];
     if (parts.count != 2 && parts.count != 3) return NO;
-    if (parts[0].length == 0 || parts[1].length == 0) return NO;
-    if (parts.count == 3 && parts[2].length == 0) return NO;
+    NSString *p0 = parts[0];
+    NSString *p1 = parts[1];
+    if (p0.length == 0 || p1.length == 0) return NO;
+    if (parts.count == 3) {
+        NSString *p2 = parts[2];
+        if (p2.length == 0) return NO;
+    }
     
     NSData *sig = [[NSData alloc] initWithBase64EncodedString:
         parts[0]
