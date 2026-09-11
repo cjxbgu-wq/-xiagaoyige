@@ -1,147 +1,65 @@
-name: Build VCamPlus
+name: Build iOS Tweak DEB
 
 on:
   push:
+    tags: ['v*', 'release/*']
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
-  build:
+  build-deb:
     runs-on: macos-latest
+    timeout-minutes: 30
+    env:
+      THEOS: /opt/theos
+      FINALPACKAGE: 1
     steps:
       - uses: actions/checkout@v4
-
-      - name: Install dependencies
+        with:
+          submodules: recursive
+          fetch-depth: 0
+      
+      - name: Install Theos
         run: |
-          brew install ldid fakeroot dpkg
-          git clone --recursive https://github.com/theos/theos.git "$HOME/theos"
-
-      - name: Download iPhoneOS SDK
-        run: |
-          mkdir -p "$HOME/theos/sdks"
-          cd /tmp
-          curl -L -o sdks.tar.gz "https://github.com/theos/sdks/archive/refs/heads/master.tar.gz"
-          tar -xzf sdks.tar.gz
-          for v in 15.6 16.5; do
-            if [ -d "sdks-master/iPhoneOS${v}.sdk" ]; then
-              cp -R "sdks-master/iPhoneOS${v}.sdk" "$HOME/theos/sdks/"
-              echo "Copied iPhoneOS${v}.sdk"
-            fi
-          done
-          echo "=== installed SDKs ==="
-          ls -la "$HOME/theos/sdks/"
-
+          git clone --recursive https://github.com/theos/theos.git $THEOS
+          echo "$THEOS/bin" >> $GITHUB_PATH
+      
+      - name: Install deps
+        run: brew install ldid dpkg
+      
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - run: pip install cryptography
+      
       - name: Generate obfuscated sources
+        run: python gen_obf_src.py
+      
+      - name: Build DEB
         run: |
-          cd "$GITHUB_WORKSPACE"
-          python3 gen_obf_src.py
-          echo "=== obfsrc ==="
-          ls -la obfsrc/
-
-      - name: Build tweak
-        env:
-          THEOS: /Users/runner/theos
-          THEOS_PACKAGE_SCHEME: rootless
-        run: |
-          cd "$GITHUB_WORKSPACE"
           make clean
-          make FINALPACKAGE=1 THEOS_PACKAGE_SCHEME=rootless 2>&1 || { echo "BUILD FAILED"; exit 1; }
-          echo "=== dylib (arm64) ==="
-          ls -la .theos/obj/arm64/VCamPlus.dylib 2>/dev/null || echo "MISSING arm64"
-          echo "=== dylib (arm64e) ==="
-          ls -la .theos/obj/arm64e/VCamPlus.dylib 2>/dev/null || echo "MISSING arm64e"
-          test -f .theos/obj/arm64/VCamPlus.dylib || { echo "arm64 dylib missing"; exit 1; }
-          test -f .theos/obj/arm64e/VCamPlus.dylib || { echo "arm64e dylib missing"; exit 1; }
-
-      - name: Merge and verify
+          make FINALPACKAGE=1
+        env:
+          THEOS: /opt/theos
+          FINALPACKAGE: 1
+      
+      - name: Verify DEB
         run: |
-          mkdir -p artifact
-          lipo -create .theos/obj/arm64/VCamPlus.dylib .theos/obj/arm64e/VCamPlus.dylib -output artifact/VCamPlus.dylib
-          # strip 本地符号(静态 C 函数名会进符号表泄露机制名; 先 strip 再签名)
-          strip -x artifact/VCamPlus.dylib 2>/dev/null || strip artifact/VCamPlus.dylib
-          # __TEXT 完整性签名注入(1.3.70): 必须在 ldid 重签名前 —— 注入后
-          # ldid -S 覆盖修改后的字节, trustcache CD hash 正确。口径: 从
-          # __TEXT 第一个 section offset 起到 text_len 跳 40B 洞(ldid 重签
-          # 只改 load command 区/签名, 代码区不变 —— before/after 实测)
-          python3 inject_text_sig.py artifact/VCamPlus.dylib artifact/sigmeta.txt
-          ldid -S artifact/VCamPlus.dylib
-          cp VCamPlus.plist artifact/ 2>/dev/null || true
-          echo "=== fat dylib info ==="
-          lipo -info artifact/VCamPlus.dylib
-          file artifact/VCamPlus.dylib
-          ls -la artifact/
-
-      - name: Leak gate (obfuscation verification)
-        run: |
-          cd "$GITHUB_WORKSPACE"
-          python3 check_leak.py artifact/VCamPlus.dylib
-
-      - name: Build deb package (rootless)
-        run: |
-          cd "$GITHUB_WORKSPACE"
-          mkdir -p debroot/DEBIAN
-          # 纯千面布局 v2(2026-08-21, 1.3.20): 同 1.3.19 但**去掉 .roothidepatch 标记**。
-          # 设备实证(1.3.19): roothide patch 系统对带标记的 dylib 执行"收割" ——
-          # /usr/lib/DynamicPatches/AutoPatches.dylib 在安装瞬间被重新生成(mtime 对齐),
-          # TweakInject 里的 dylib+plist 被移除只剩标记; 且删除与 trustcache 无关
-          # (注册成功 122 条目后仍被删)。标记不是"加载我"而是"收割我"。
-          # 历史验证的正常路径 = 无标记纯 TweakInject dylib 由 ellekit 扫描加载
-          # (1.3.6~1.3.16 时代全部如此)。data.tar 只剩 dylib+plist 两个文件。
-          mkdir -p "debroot/Library/MobileSubstrate/DynamicLibraries"
-
-          cp artifact/VCamPlus.dylib "debroot/Library/MobileSubstrate/DynamicLibraries/VCamPlus.dylib"
-          cp artifact/VCamPlus.plist "debroot/Library/MobileSubstrate/DynamicLibraries/VCamPlus.plist" 2>/dev/null || true
-
-          # control/preinst/postinst/postrm 来自仓库(装完即用: postinst 自动 trustcache+respring)
-          cp control debroot/DEBIAN/control
-          cp preinst debroot/DEBIAN/preinst
-          cp postinst debroot/DEBIAN/postinst
-          cp postrm debroot/DEBIAN/postrm
-
-          # 防重打包(1.3.70): 把 __TEXT 签名洞的偏移+期望哈希注入 postinst
-          # (占位符 __SIG_HOLE_OFF__/__SIG_HOLE_SHA__ → sigmeta.txt 实际值)
-          SIG_OFF=$(head -1 artifact/sigmeta.txt)
-          SIG_SHA=$(tail -1 artifact/sigmeta.txt)
-          sed -i '' "s/__SIG_HOLE_OFF__/$SIG_OFF/" debroot/DEBIAN/postinst
-          sed -i '' "s/__SIG_HOLE_SHA__/$SIG_SHA/" debroot/DEBIAN/postinst
-          grep -q "$SIG_SHA" debroot/DEBIAN/postinst || { echo "sigmeta inject failed"; exit 1; }
-
-          # 维护脚本必须 LF 行尾 + 可执行, 否则 dpkg 报 "bad interpreter" 或拒绝运行
-          sed -i '' $'s/\r$//' debroot/DEBIAN/preinst debroot/DEBIAN/postinst debroot/DEBIAN/postrm debroot/DEBIAN/control || true
-          chmod 0755 debroot/DEBIAN
-          chmod 0644 debroot/DEBIAN/control
-          chmod 0755 debroot/DEBIAN/preinst
-          chmod 0755 debroot/DEBIAN/postinst
-          chmod 0755 debroot/DEBIAN/postrm
-          chmod 0755 "debroot/Library/MobileSubstrate/DynamicLibraries/VCamPlus.dylib"
-          chmod 0644 "debroot/Library/MobileSubstrate/DynamicLibraries/VCamPlus.plist" 2>/dev/null || true
-
-          # gzip 打包(供 postprocess 用标准库处理), 再剥离目录条目
-          # (2026-08-18 设备实证: /var/jb 是 patchloader 的符号链接,
-          #  目录条目触发 dpkg overwrite 冲突, 装不上)
-          # preinst(2026-08-20 SE2 设备实证): 目录条目剥离后, 全新设备
-          # TweakInject 目录可能不存在 → 解包 ENOENT; preinst 先 mkdir 兜底
-          fakeroot dpkg-deb -Zgzip -b debroot VCamPlus.deb
-          python3 postprocess_deb.py VCamPlus.deb VCamPlus.deb
-          cp VCamPlus.deb artifact/
-
-          echo "=== deb package ==="
-          ls -la artifact/VCamPlus.deb
-          file artifact/VCamPlus.deb
-
-          echo "=== deb 内容校验(DEBIAN 脚本必须在场) ==="
-          dpkg-deb -c VCamPlus.deb
-          dpkg-deb -I VCamPlus.deb
-
-      - name: Upload dylib
+          ls -la packages/
+          dpkg-deb -I packages/*.deb
+      
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: VCamPlus-dylib
-          path: artifact/VCamPlus.dylib
-          if-no-files-found: error
-
-      - name: Upload deb
-        uses: actions/upload-artifact@v4
+          name: vcam-deb
+          path: packages/*.deb
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
         with:
-          name: VCamPlus-deb
-          path: artifact/VCamPlus.deb
-          if-no-files-found: error
+          files: packages/*.deb
+          generate_release_notes: true
