@@ -42,7 +42,7 @@ static UIImage *vcamDecodeBtnIcon(const unsigned char *enc, NSUInteger len,
 
 static void vcam_ball_log(NSString *msg) {
     @try {
-        NSString *logPath = obfN(408);
+        NSString *logPath = obfN(412);
         NSString *ts = [NSDate date].description;
         NSString *entry = [NSString stringWithFormat:obfN(4), ts, msg];
         NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:logPath];
@@ -59,7 +59,7 @@ static void vcam_ball_log(NSString *msg) {
 // 密钥验证(1.3.54): raw 16 hex → 4-4-4-4 分组展示(仅 UI 格式化, 比对口径 raw)
 static NSString *vcamGrouped16(NSString *raw16) {
     if (![raw16 isKindOfClass:[NSString class]] || raw16.length != 16) return raw16;
-    return [NSString stringWithFormat:obfN(409),
+    return [NSString stringWithFormat:obfN(413),
         [raw16 substringToIndex:4],
         [raw16 substringWithRange:NSMakeRange(4, 4)],
         [raw16 substringWithRange:NSMakeRange(8, 4)],
@@ -105,17 +105,17 @@ static struct {
 static void vcamIOSurfaceInit(void) {
     if (sVcamIOS.ok) return;
     sVcamIOS.ok = 1;
-    sVcamIOS.lock = (VcamIOSLockFn)dlsym(RTLD_DEFAULT, OBCS(410));
-    sVcamIOS.unlock = (VcamIOSLockFn)dlsym(RTLD_DEFAULT, OBCS(411));
-    sVcamIOS.base = (VcamIOSBaseAddrFn)dlsym(RTLD_DEFAULT, OBCS(412));
-    sVcamIOS.width = (VcamIOSDimFn)dlsym(RTLD_DEFAULT, OBCS(413));
-    sVcamIOS.height = (VcamIOSDimFn)dlsym(RTLD_DEFAULT, OBCS(414));
-    sVcamIOS.stride = (VcamIOSDimFn)dlsym(RTLD_DEFAULT, OBCS(415));
-    sVcamIOS.fmt = (VcamIOSFmtFn)dlsym(RTLD_DEFAULT, OBCS(416));
+    sVcamIOS.lock = (VcamIOSLockFn)dlsym(RTLD_DEFAULT, OBCS(414));
+    sVcamIOS.unlock = (VcamIOSLockFn)dlsym(RTLD_DEFAULT, OBCS(415));
+    sVcamIOS.base = (VcamIOSBaseAddrFn)dlsym(RTLD_DEFAULT, OBCS(416));
+    sVcamIOS.width = (VcamIOSDimFn)dlsym(RTLD_DEFAULT, OBCS(417));
+    sVcamIOS.height = (VcamIOSDimFn)dlsym(RTLD_DEFAULT, OBCS(418));
+    sVcamIOS.stride = (VcamIOSDimFn)dlsym(RTLD_DEFAULT, OBCS(419));
+    sVcamIOS.fmt = (VcamIOSFmtFn)dlsym(RTLD_DEFAULT, OBCS(420));
     if (!sVcamIOS.lock || !sVcamIOS.unlock || !sVcamIOS.base ||
         !sVcamIOS.width || !sVcamIOS.height || !sVcamIOS.stride || !sVcamIOS.fmt) {
         sVcamIOS.ok = -1;  // 不完整: 全链路禁用, 走回退
-        vcam_ball_log(obfN(417));
+        vcam_ball_log(obfN(421));
     }
 }
 
@@ -126,14 +126,14 @@ static void vcamIOSurfaceInit(void) {
 // 名称 getter 函数保留(诊断用)。
 static NSString *vcamKnownLightName(int idx) {
     switch (idx) {
-        case 0: return obfN(418);
-        case 1: return obfN(419);
-        case 2: return obfN(420);
-        case 3: return obfN(421);
-        case 4: return obfN(422);
-        case 5: return obfN(423);
+        case 0: return obfN(422);
+        case 1: return obfN(423);
+        case 2: return obfN(424);
+        case 3: return obfN(425);
+        case 4: return obfN(426);
+        case 5: return obfN(427);
     }
-    return obfN(424);
+    return obfN(428);
 }
 
 // RGBA 像素数组 → 已知色匹配。返回 0=无匹配, 否则标准纯色值(内置色表,
@@ -176,11 +176,11 @@ static mach_port_t vcamCARSPortForStrategy(int strategy) {
         static int luProbed = 0;
         if (!luProbed) {
             luProbed = 1;
-            lookUp = (VcamBootstrapLookUpFn)dlsym(RTLD_DEFAULT, OBCS(425));
+            lookUp = (VcamBootstrapLookUpFn)dlsym(RTLD_DEFAULT, OBCS(429));
         }
         if (!lookUp) return MACH_PORT_NULL;
         mach_port_t port = MACH_PORT_NULL;
-        kern_return_t kr = lookUp(bootstrap_port, OBCS(426), &port);
+        kern_return_t kr = lookUp(bootstrap_port, OBCS(430), &port);
         if (kr == KERN_SUCCESS && MACH_PORT_VALID(port)) return port;
         return MACH_PORT_NULL;
     }
@@ -189,7 +189,7 @@ static mach_port_t vcamCARSPortForStrategy(int strategy) {
         static int sbsProbed = 0;
         if (!sbsProbed) {
             sbsProbed = 1;
-            sbsPort = (VcamSBSPortFn)dlsym(RTLD_DEFAULT, OBCS(427));
+            sbsPort = (VcamSBSPortFn)dlsym(RTLD_DEFAULT, OBCS(431));
         }
         if (!sbsPort) return MACH_PORT_NULL;
         mach_port_t port = sbsPort();
@@ -205,9 +205,9 @@ static VcamIOSurfaceRef vcamCaptureDisplaySurfaceStrategy(int strategy) {
     if (sVcamIOS.ok < 0) return NULL;
     if (!sVcamCARSFnProbed) {
         sVcamCARSFnProbed = 1;
-        sVcamCARSFn = (VcamCARSCaptureFn)dlsym(RTLD_DEFAULT, OBCS(428));
+        sVcamCARSFn = (VcamCARSCaptureFn)dlsym(RTLD_DEFAULT, OBCS(432));
         if (!sVcamCARSFn) {
-            vcam_ball_log(obfN(429));
+            vcam_ball_log(obfN(433));
             return NULL;
         }
     }
@@ -233,9 +233,9 @@ static VcamUICreateScreenImageFn vcamUICreateScreenImage(void) {
     static int probed = 0;
     if (!probed) {
         probed = 1;
-        fn = (VcamUICreateScreenImageFn)dlsym(RTLD_DEFAULT, OBCS(403));
+        fn = (VcamUICreateScreenImageFn)dlsym(RTLD_DEFAULT, OBCS(407));
         vcam_ball_log([NSString stringWithFormat:
-            obfN(430), fn ? obfN(431) : obfN(432)]);
+            obfN(434), fn ? obfN(435) : obfN(436)]);
     }
     return fn;
 }
@@ -332,7 +332,7 @@ static void *vcamPickCaptureMain(void *ctx) {
                 if (++consecutiveFails >= 20) {
                     gVcamPickStrategyFailed[strategy] = YES;
                     vcam_ball_log([NSString stringWithFormat:
-                        obfN(433), strategy]);
+                        obfN(437), strategy]);
                     break;
                 }
             }
@@ -345,7 +345,7 @@ static void *vcamPickCaptureMain(void *ctx) {
     }
     gVcamPick.threadAlive = 0;
     vcam_ball_log([NSString stringWithFormat:
-        obfN(434), strategy]);
+        obfN(438), strategy]);
     return NULL;
 }
 
@@ -565,16 +565,16 @@ static void *vcamPickCaptureMain(void *ctx) {
 
     dispatch_async(dispatch_get_main_queue(), ^{
         [self createOverlayWindow];
-        vcam_ball_log(obfN(435));
+        vcam_ball_log(obfN(439));
     });
 
     // 监听前后台切换(关 隐藏后的恢复通道: 锁屏解锁/回到桌面时 SpringBoard 重新 active)
     [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:obfSEL(436)
+                                             selector:obfSEL(440)
                                                  name:UIApplicationDidBecomeActiveNotification
                                                object:nil];
     [[NSNotificationCenter defaultCenter] addObserver:self
-                                             selector:obfSEL(437)
+                                             selector:obfSEL(441)
                                                  name:UIApplicationDidEnterBackgroundNotification
                                                object:nil];
 }
@@ -621,10 +621,10 @@ static void *vcamPickCaptureMain(void *ctx) {
 
     if (windowScene) {
         _overlayWindow = [[VCamOverlayWindow alloc] initWithWindowScene:windowScene];
-        vcam_ball_log([NSString stringWithFormat:obfN(438), windowScene]);
+        vcam_ball_log([NSString stringWithFormat:obfN(442), windowScene]);
     } else {
         _overlayWindow = [[VCamOverlayWindow alloc] initWithFrame:screenBounds];
-        vcam_ball_log(obfN(439));
+        vcam_ball_log(obfN(443));
     }
     _overlayWindow.frame = screenBounds;
     _overlayWindow.windowLevel = UIWindowLevelAlert + 100;
@@ -640,11 +640,11 @@ static void *vcamPickCaptureMain(void *ctx) {
     _ballView = [[VCamBallView alloc] initWithFrame:CGRectMake(ballX, ballY, ballSize, ballSize)];
 
     // 点击手势
-    UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:obfSEL(440)];
+    UITapGestureRecognizer *tapGesture = [[UITapGestureRecognizer alloc] initWithTarget:self action:obfSEL(444)];
     [_ballView addGestureRecognizer:tapGesture];
 
     // 拖动手势
-    UIPanGestureRecognizer *panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:obfSEL(441)];
+    UIPanGestureRecognizer *panGesture = [[UIPanGestureRecognizer alloc] initWithTarget:self action:obfSEL(445)];
     [_ballView addGestureRecognizer:panGesture];
 
     // 创建面板（初始隐藏, 先加入 window）
@@ -680,8 +680,8 @@ static void *vcamPickCaptureMain(void *ctx) {
     btn.layer.masksToBounds = YES;
     [btn addTarget:self action:sel forControlEvents:UIControlEventTouchUpInside];
     // 即时按压反馈: 按下高亮, 抬起/取消立即恢复 —— 按钮零延迟"有反应"的手感
-    [btn addTarget:self action:obfSEL(442) forControlEvents:UIControlEventTouchDown];
-    [btn addTarget:self action:obfSEL(443) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
+    [btn addTarget:self action:obfSEL(446) forControlEvents:UIControlEventTouchDown];
+    [btn addTarget:self action:obfSEL(447) forControlEvents:UIControlEventTouchUpInside | UIControlEventTouchUpOutside | UIControlEventTouchCancel];
     return btn;
 }
 
@@ -739,26 +739,26 @@ static void *vcamPickCaptureMain(void *ctx) {
     CGFloat tabX0 = (panelW - (tabW * 3 + tabGap * 2)) / 2;
     _tabControlBtn = [UIButton buttonWithType:UIButtonTypeSystem];
     _tabControlBtn.frame = CGRectMake(tabX0, pad, tabW, tabH);
-    [_tabControlBtn setTitle:obfN(444) forState:UIControlStateNormal];
+    [_tabControlBtn setTitle:obfN(448) forState:UIControlStateNormal];
     _tabControlBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     _tabControlBtn.layer.cornerRadius = 7;
-    [_tabControlBtn addTarget:self action:obfSEL(445) forControlEvents:UIControlEventTouchUpInside];
+    [_tabControlBtn addTarget:self action:obfSEL(449) forControlEvents:UIControlEventTouchUpInside];
     [_panelView addSubview:_tabControlBtn];
 
     _tabLightBtn = [UIButton buttonWithType:UIButtonTypeSystem];
     _tabLightBtn.frame = CGRectMake(tabX0 + tabW + tabGap, pad, tabW, tabH);
-    [_tabLightBtn setTitle:obfN(446) forState:UIControlStateNormal];
+    [_tabLightBtn setTitle:obfN(450) forState:UIControlStateNormal];
     _tabLightBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     _tabLightBtn.layer.cornerRadius = 7;
-    [_tabLightBtn addTarget:self action:obfSEL(447) forControlEvents:UIControlEventTouchUpInside];
+    [_tabLightBtn addTarget:self action:obfSEL(451) forControlEvents:UIControlEventTouchUpInside];
     [_panelView addSubview:_tabLightBtn];
 
     _tabSettingsBtn = [UIButton buttonWithType:UIButtonTypeSystem];
     _tabSettingsBtn.frame = CGRectMake(tabX0 + (tabW + tabGap) * 2, pad, tabW, tabH);
-    [_tabSettingsBtn setTitle:obfN(448) forState:UIControlStateNormal];
+    [_tabSettingsBtn setTitle:obfN(452) forState:UIControlStateNormal];
     _tabSettingsBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     _tabSettingsBtn.layer.cornerRadius = 7;
-    [_tabSettingsBtn addTarget:self action:obfSEL(449) forControlEvents:UIControlEventTouchUpInside];
+    [_tabSettingsBtn addTarget:self action:obfSEL(453) forControlEvents:UIControlEventTouchUpInside];
     [_panelView addSubview:_tabSettingsBtn];
 
     // ===== 控制页: 4x4 宫格 =====
@@ -832,22 +832,22 @@ static void *vcamPickCaptureMain(void *ctx) {
     // 1.3.26 修复: 播图标此前漏绑(icon=nil → 空白按钮), "左上角图标没显示"的根因
     // 1.3.28 图标按需调大小: 播放大(insets 2), 复缩小(insets 8), 其余中等(insets 4)
     struct GridCell cells[4][4] = {
-        { {CellIcon, nil, iconPlay, {2, 2, 2, 2}, obfSEL(450)},
-          {CellSymbol, obfN(451), nil, {0, 0, 0, 0}, obfSEL(452)},
-          {CellIcon, nil, iconRestore, {8, 8, 8, 8}, obfSEL(453)},
-          {CellText, obfN(454), nil, {0, 0, 0, 0}, obfSEL(455)} },
-        { {CellSymbol, obfN(456), nil, {0, 0, 0, 0}, obfSEL(457)},
-          {CellSymbol, obfN(458), nil, {0, 0, 0, 0}, obfSEL(459)},
-          {CellSymbol, obfN(460), nil, {0, 0, 0, 0}, obfSEL(461)},
-          {CellText, obfN(462), nil, {0, 0, 0, 0}, obfSEL(463)} },
-        { {CellSymbol, obfN(464), nil, {0, 0, 0, 0}, obfSEL(465)},
-          {CellSymbol, obfN(466), nil, {0, 0, 0, 0}, obfSEL(467)},
-          {CellSymbol, obfN(468), nil, {0, 0, 0, 0}, obfSEL(469)},
-          {CellText, obfN(470), nil, {0, 0, 0, 0}, obfSEL(471)} },
-        { {CellIcon, nil, iconRotate, {7, 7, 7, 7}, obfSEL(472)},
-          {CellIcon, nil, iconMirror, {7, 7, 7, 7}, obfSEL(473)},
-          {CellIcon, nil, iconReplace, {4, 4, 4, 4}, obfSEL(474)},
-          {CellText, obfN(475), nil, {0, 0, 0, 0}, obfSEL(476)} },
+        { {CellIcon, nil, iconPlay, {2, 2, 2, 2}, obfSEL(454)},
+          {CellSymbol, obfN(455), nil, {0, 0, 0, 0}, obfSEL(456)},
+          {CellIcon, nil, iconRestore, {8, 8, 8, 8}, obfSEL(457)},
+          {CellText, obfN(458), nil, {0, 0, 0, 0}, obfSEL(459)} },
+        { {CellSymbol, obfN(460), nil, {0, 0, 0, 0}, obfSEL(461)},
+          {CellSymbol, obfN(462), nil, {0, 0, 0, 0}, obfSEL(463)},
+          {CellSymbol, obfN(464), nil, {0, 0, 0, 0}, obfSEL(465)},
+          {CellText, obfN(466), nil, {0, 0, 0, 0}, obfSEL(467)} },
+        { {CellSymbol, obfN(468), nil, {0, 0, 0, 0}, obfSEL(469)},
+          {CellSymbol, obfN(470), nil, {0, 0, 0, 0}, obfSEL(471)},
+          {CellSymbol, obfN(472), nil, {0, 0, 0, 0}, obfSEL(473)},
+          {CellText, obfN(474), nil, {0, 0, 0, 0}, obfSEL(475)} },
+        { {CellIcon, nil, iconRotate, {7, 7, 7, 7}, obfSEL(476)},
+          {CellIcon, nil, iconMirror, {7, 7, 7, 7}, obfSEL(477)},
+          {CellIcon, nil, iconReplace, {4, 4, 4, 4}, obfSEL(478)},
+          {CellText, obfN(479), nil, {0, 0, 0, 0}, obfSEL(480)} },
     };
     for (int r = 0; r < 4; r++) {
         for (int c = 0; c < 4; c++) {
@@ -876,7 +876,7 @@ static void *vcamPickCaptureMain(void *ctx) {
                     btn.imageEdgeInsets = UIEdgeInsetsMake(9, 9, 9, 9);
                 } else {
                     // 兜底: 极老系统无 SF Symbol 时显示文字
-                    btn = [self makeButton:obfN(477) frame:f selector:cell.action];
+                    btn = [self makeButton:obfN(481) frame:f selector:cell.action];
                     btn.titleLabel.font = [UIFont boldSystemFontOfSize:16];
                 }
             } else {
@@ -888,15 +888,15 @@ static void *vcamPickCaptureMain(void *ctx) {
             if (r == 3 && c == 1) _mirrorBtn = btn;             // 镜(图标)
             if (r == 3 && c == 2) _replaceBtn = btn;            // 替(图标)
             // 1.3.53 箭头按钮: 记录引用 + 长按 = pan 方向补偿开关(镜像显示 App 用)
-            if (cell.action == obfSEL(452) ||
-                cell.action == obfSEL(457) ||
-                cell.action == obfSEL(459) ||
-                cell.action == obfSEL(461)) {
+            if (cell.action == obfSEL(456) ||
+                cell.action == obfSEL(461) ||
+                cell.action == obfSEL(463) ||
+                cell.action == obfSEL(465)) {
                 if (!self.panArrowBtns) self.panArrowBtns = [NSMutableArray array];
                 [self.panArrowBtns addObject:btn];
                 UILongPressGestureRecognizer *lp =
                     [[UILongPressGestureRecognizer alloc] initWithTarget:self
-                                                                action:obfSEL(478)];
+                                                                action:obfSEL(482)];
                 lp.minimumPressDuration = 0.5;
                 [btn addGestureRecognizer:lp];
             }
@@ -912,9 +912,9 @@ static void *vcamPickCaptureMain(void *ctx) {
 
     // 屏幕取色总开关: 开 = 取色点显示 + 检测启动 + 打光启用(颜色跟屏幕闪烁)
     // 1.3.71 标题与功能反相(默认关 → 显示"开")
-    _pickColorBtn = [self makeButton:obfN(479)
+    _pickColorBtn = [self makeButton:obfN(483)
                                frame:CGRectMake(pad, 0, contentW, rowH)
-                             selector:obfSEL(480)];
+                             selector:obfSEL(484)];
     _pickColorBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     [_lightPageView addSubview:_pickColorBtn];
 
@@ -927,7 +927,7 @@ static void *vcamPickCaptureMain(void *ctx) {
     _lightColorSwatch.backgroundColor = [UIColor colorWithWhite:1 alpha:0.12];
     [_lightPageView addSubview:_lightColorSwatch];
     _lightColorLabel = [[UILabel alloc] initWithFrame:CGRectMake(pad + 24, colorRowY, contentW - 24, 22)];
-    _lightColorLabel.text = obfN(481);
+    _lightColorLabel.text = obfN(485);
     _lightColorLabel.textColor = [UIColor colorWithRed:0.72 green:0.73 blue:0.75 alpha:1.0];
     _lightColorLabel.font = [UIFont systemFontOfSize:12];
     [_lightPageView addSubview:_lightColorLabel];
@@ -938,10 +938,10 @@ static void *vcamPickCaptureMain(void *ctx) {
     CGFloat sliderW = contentW - 56 - 42;
     CGFloat sy = colorRowY + 22 + 8;
     CGFloat rowStep = 30 + 6;
-    NSString *rowTitles[5] = {obfN(482), obfN(483), obfN(484), obfN(485), obfN(486)};
-    SEL rowActions[5] = {obfSEL(487), obfSEL(488),
-                         obfSEL(489), obfSEL(490),
-                         obfSEL(491)};
+    NSString *rowTitles[5] = {obfN(486), obfN(487), obfN(488), obfN(489), obfN(490)};
+    SEL rowActions[5] = {obfSEL(491), obfSEL(492),
+                         obfSEL(493), obfSEL(494),
+                         obfSEL(495)};
     int initVals[5] = {
         [VCamNotify plistLightIntensity], [VCamNotify plistLightDiameter],
         [VCamNotify plistLightX], [VCamNotify plistLightY],
@@ -967,7 +967,7 @@ static void *vcamPickCaptureMain(void *ctx) {
         [_lightPageView addSubview:slider];
 
         UILabel *val = [[UILabel alloc] initWithFrame:CGRectMake(pad + contentW - 42, ry + 5, 42, 20)];
-        val.text = [NSString stringWithFormat:obfN(492), v];
+        val.text = [NSString stringWithFormat:obfN(496), v];
         val.textColor = [UIColor whiteColor];
         val.font = [UIFont systemFontOfSize:12];
         val.textAlignment = NSTextAlignmentRight;
@@ -989,37 +989,37 @@ static void *vcamPickCaptureMain(void *ctx) {
     [_panelView addSubview:_settingsPageView];
 
     // 选择视频(整宽, 原 3x3 布局时期在控制页, 4x4 宫格化后移到设置页)
-    VCamPanelButton *selectBtn = [self makeButton:obfN(493)
+    VCamPanelButton *selectBtn = [self makeButton:obfN(497)
                                             frame:CGRectMake(pad, 0, contentW, rowH)
-                                          selector:obfSEL(494)];
+                                          selector:obfSEL(498)];
     selectBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     [_settingsPageView addSubview:selectBtn];
 
-    VCamPanelButton *preset2 = [self makeButton:obfN(495)
+    VCamPanelButton *preset2 = [self makeButton:obfN(499)
                                           frame:CGRectMake(pad, rowH + gap, contentW, rowH)
-                                        selector:obfSEL(496)];
+                                        selector:obfSEL(500)];
     preset2.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     [_settingsPageView addSubview:preset2];
 
-    VCamPanelButton *preset3 = [self makeButton:obfN(497)
+    VCamPanelButton *preset3 = [self makeButton:obfN(501)
                                           frame:CGRectMake(pad, (rowH + gap) * 2, contentW, rowH)
-                                        selector:obfSEL(498)];
+                                        selector:obfSEL(502)];
     preset3.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     [_settingsPageView addSubview:preset3];
 
     // 预设视频4(1.3.45): 原"前置方向修正"按钮位置换功能 —— 用户要求改预设槽位4。
     // 槽位 4 = /var/mobile/Media/DCIM/6/4.mp4, 由控制页宫格"4"键播放
-    VCamPanelButton *preset4 = [self makeButton:obfN(499)
+    VCamPanelButton *preset4 = [self makeButton:obfN(503)
                                           frame:CGRectMake(pad, (rowH + gap) * 3, contentW, rowH)
-                                        selector:obfSEL(500)];
+                                        selector:obfSEL(504)];
     preset4.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     [_settingsPageView addSubview:preset4];
 
     // 密钥验证(1.3.54): 原"岐盛相机"频道链接按钮改为激活入口 ——
     // 打开激活页(设备码+密钥输入), 通过验证后才能使用替换摄像头功能
-    VCamPanelButton *licenseEntry = [self makeButton:obfN(501)
+    VCamPanelButton *licenseEntry = [self makeButton:obfN(505)
                                           frame:CGRectMake(pad, (rowH + gap) * 4, contentW, rowH)
-                                        selector:obfSEL(502)];
+                                        selector:obfSEL(506)];
     licenseEntry.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     [_settingsPageView addSubview:licenseEntry];
 
@@ -1040,14 +1040,14 @@ static void *vcamPickCaptureMain(void *ctx) {
     [_panelView addSubview:_licensePageView];
 
     UILabel *licTitle = [[UILabel alloc] initWithFrame:CGRectMake(pad, 0, contentW, 22)];
-    licTitle.text = obfN(503);
+    licTitle.text = obfN(507);
     licTitle.textColor = [UIColor whiteColor];
     licTitle.textAlignment = NSTextAlignmentCenter;
     licTitle.font = [UIFont boldSystemFontOfSize:16];
     [_licensePageView addSubview:licTitle];
 
     UILabel *codeCaption = [[UILabel alloc] initWithFrame:CGRectMake(pad, 28, contentW, 16)];
-    codeCaption.text = obfN(504);
+    codeCaption.text = obfN(508);
     codeCaption.textColor = [UIColor colorWithRed:0.72 green:0.73 blue:0.75 alpha:1.0];
     codeCaption.textAlignment = NSTextAlignmentCenter;
     codeCaption.font = [UIFont systemFontOfSize:12];
@@ -1061,19 +1061,19 @@ static void *vcamPickCaptureMain(void *ctx) {
     _licenseCodeLabel.userInteractionEnabled = YES;
     _licenseCodeLabel.text = vcamGrouped16([VCamNotify qvDc]);
     UITapGestureRecognizer *codeTap = [[UITapGestureRecognizer alloc]
-        initWithTarget:self action:obfSEL(505)];
+        initWithTarget:self action:obfSEL(509)];
     [_licenseCodeLabel addGestureRecognizer:codeTap];
     [_licensePageView addSubview:_licenseCodeLabel];
 
     _licenseCodeHint = [[UILabel alloc] initWithFrame:CGRectMake(pad, 70, contentW, 14)];
-    _licenseCodeHint.text = obfN(506);
+    _licenseCodeHint.text = obfN(510);
     _licenseCodeHint.textColor = [UIColor colorWithRed:0.72 green:0.73 blue:0.75 alpha:1.0];
     _licenseCodeHint.textAlignment = NSTextAlignmentCenter;
     _licenseCodeHint.font = [UIFont systemFontOfSize:11];
     [_licensePageView addSubview:_licenseCodeHint];
 
     UILabel *keyCaption = [[UILabel alloc] initWithFrame:CGRectMake(pad, 92, contentW, 16)];
-    keyCaption.text = obfN(507);
+    keyCaption.text = obfN(511);
     keyCaption.textColor = [UIColor colorWithRed:0.72 green:0.73 blue:0.75 alpha:1.0];
     keyCaption.textAlignment = NSTextAlignmentCenter;
     keyCaption.font = [UIFont systemFontOfSize:12];
@@ -1085,7 +1085,7 @@ static void *vcamPickCaptureMain(void *ctx) {
     _licenseField.layer.masksToBounds = YES;
     _licenseField.textColor = [UIColor whiteColor];
     _licenseField.font = [UIFont systemFontOfSize:13];
-    _licenseField.placeholder = obfN(508);
+    _licenseField.placeholder = obfN(512);
     _licenseField.textAlignment = NSTextAlignmentCenter;
     // 1.3.55: 密钥是 base64 签名(区分大小写!) —— 关自动大写/纠错/联想
     _licenseField.autocapitalizationType = UITextAutocapitalizationTypeNone;
@@ -1099,15 +1099,15 @@ static void *vcamPickCaptureMain(void *ctx) {
 
     // 1.3.55: 粘贴 + 激活 双按钮(密钥 ~88 位, 粘贴输入为主)
     CGFloat halfW = (contentW - 8) / 2;
-    VCamPanelButton *pasteBtn = [self makeButton:obfN(509)
+    VCamPanelButton *pasteBtn = [self makeButton:obfN(513)
                                        frame:CGRectMake(pad, 154, halfW, rowH)
-                                     selector:obfSEL(510)];
+                                     selector:obfSEL(514)];
     pasteBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     [_licensePageView addSubview:pasteBtn];
 
-    VCamPanelButton *activateBtn = [self makeButton:obfN(511)
+    VCamPanelButton *activateBtn = [self makeButton:obfN(515)
                                           frame:CGRectMake(pad + halfW + 8, 154, halfW, rowH)
-                                        selector:obfSEL(512)];
+                                        selector:obfSEL(516)];
     activateBtn.titleLabel.font = [UIFont boldSystemFontOfSize:14];
     [_licensePageView addSubview:activateBtn];
 
@@ -1117,7 +1117,7 @@ static void *vcamPickCaptureMain(void *ctx) {
     [_licensePageView addSubview:_licenseStatusLabel];
 
     UILabel *licFoot = [[UILabel alloc] initWithFrame:CGRectMake(pad, 216, contentW, 14)];
-    licFoot.text = obfN(513);
+    licFoot.text = obfN(517);
     licFoot.textColor = [UIColor colorWithRed:0.72 green:0.73 blue:0.75 alpha:1.0];
     licFoot.textAlignment = NSTextAlignmentCenter;
     licFoot.font = [UIFont systemFontOfSize:11];
@@ -1145,11 +1145,11 @@ static void *vcamPickCaptureMain(void *ctx) {
         [self showPickDot];
         [self startColorPickup];
         // 1.3.71 反相标题: 功能开 → 显示"关"
-        [_pickColorBtn setTitle:obfN(514) forState:UIControlStateNormal];
+        [_pickColorBtn setTitle:obfN(518) forState:UIControlStateNormal];
         // 1.3.67: 状态恢复时向 App 采样器发布 cfg(进程可能晚于 SB 启动,
         // 错过开启时刻的 post → 用当前 plist 状态补发)
         [VCamNotify qvPc:YES X:gVcamPick.px Y:gVcamPick.py];
-        vcam_ball_log(obfN(515));
+        vcam_ball_log(obfN(519));
     }
 }
 
@@ -1180,7 +1180,7 @@ static void *vcamPickCaptureMain(void *ctx) {
 }
 
 - (void)controlTabTapped {
-    vcam_ball_log(obfN(516));
+    vcam_ball_log(obfN(520));
     _controlPageView.hidden = NO;
     _lightPageView.hidden = YES;
     _settingsPageView.hidden = YES;
@@ -1190,7 +1190,7 @@ static void *vcamPickCaptureMain(void *ctx) {
 }
 
 - (void)lightTabTapped {
-    vcam_ball_log(obfN(517));
+    vcam_ball_log(obfN(521));
     _controlPageView.hidden = YES;
     _lightPageView.hidden = NO;
     _settingsPageView.hidden = YES;
@@ -1204,13 +1204,13 @@ static void *vcamPickCaptureMain(void *ctx) {
 // 近似颜色名(检测预览显示用)
 static NSString *vcamLightColorName(uint32_t c) {
     int r = (c >> 16) & 0xFF, g = (c >> 8) & 0xFF, b = c & 0xFF;
-    if (r > 200 && g < 80 && b < 80) return obfN(418);
-    if (r < 80 && g > 200 && b < 80) return obfN(419);
-    if (r < 80 && g < 80 && b > 200) return obfN(420);
-    if (r > 200 && g > 200 && b < 80) return obfN(421);
-    if (r < 80 && g > 200 && b > 200) return obfN(422);
-    if (r > 200 && g < 80 && b > 200) return obfN(423);
-    return obfN(518);
+    if (r > 200 && g < 80 && b < 80) return obfN(422);
+    if (r < 80 && g > 200 && b < 80) return obfN(423);
+    if (r < 80 && g < 80 && b > 200) return obfN(424);
+    if (r > 200 && g > 200 && b < 80) return obfN(425);
+    if (r < 80 && g > 200 && b > 200) return obfN(426);
+    if (r > 200 && g < 80 && b > 200) return obfN(427);
+    return obfN(522);
 }
 
 // 屏幕取色总开关: 开 = 取色点显示 + 检测启动 + 打光启用(光斑颜色跟屏幕闪烁);
@@ -1227,10 +1227,10 @@ static NSString *vcamLightColorName(uint32_t c) {
         [self showPickDot];
         [self startColorPickup];
         // 打光功能已开 → 反相标题"关"
-        [_pickColorBtn setTitle:obfN(514) forState:UIControlStateNormal];
+        [_pickColorBtn setTitle:obfN(518) forState:UIControlStateNormal];
         // 1.3.67: cfg 下行(Darwin, App 沙盒读不了 plist) —— App 采样器开启
         [VCamNotify qvPc:YES X:gVcamPick.px Y:gVcamPick.py];
-        vcam_ball_log(obfN(519));
+        vcam_ball_log(obfN(523));
     } else {
         [self stopColorPickup];
         [self hidePickDot];
@@ -1238,9 +1238,9 @@ static NSString *vcamLightColorName(uint32_t c) {
         _lastDetectedColor = 0;
         [self updateColorPreview:0];
         // 打光功能已关 → 反相标题"开"
-        [_pickColorBtn setTitle:obfN(479) forState:UIControlStateNormal];
+        [_pickColorBtn setTitle:obfN(483) forState:UIControlStateNormal];
         [VCamNotify qvPc:NO X:0 Y:0];  // App 采样器停止
-        vcam_ball_log(obfN(520));
+        vcam_ball_log(obfN(524));
     }
 }
 
@@ -1252,15 +1252,15 @@ static NSString *vcamLightColorName(uint32_t c) {
         return;
     }
     NSDictionary *pl = [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{};
-    CGFloat px = [pl[obfN(521)] doubleValue];
-    CGFloat py = [pl[obfN(522)] doubleValue];
+    CGFloat px = [pl[obfN(525)] doubleValue];
+    CGFloat py = [pl[obfN(526)] doubleValue];
     CGRect sb = _overlayWindow.bounds;
     if (px <= 0 || py <= 0) { px = sb.size.width / 2; py = sb.size.height / 2; }
     px = MAX(22, MIN(sb.size.width - 22, px));
     py = MAX(22, MIN(sb.size.height - 22, py));
     _pickDotView = [[VCamPickDotView alloc] initWithFrame:CGRectMake(px - 22, py - 22, 44, 44)];
     UIPanGestureRecognizer *pan = [[UIPanGestureRecognizer alloc] initWithTarget:self
-                                                                          action:obfSEL(523)];
+                                                                          action:obfSEL(527)];
     [_pickDotView addGestureRecognizer:pan];
     // 1.3.44: 窗口内 z 序是 [rootVC.view, 面板, 球] —— createPanel 先加面板(1018 行),
     // 球在 createOverlayWindow 642 行后加 = 球是最顶层。取色点要压在全部悬浮窗 UI
@@ -1275,7 +1275,7 @@ static NSString *vcamLightColorName(uint32_t c) {
         [_overlayWindow insertSubview:_pickDotView atIndex:1];  // rootVC.view 之上
     }
     vcam_ball_log([NSString stringWithFormat:
-        obfN(524),
+        obfN(528),
         (unsigned long)[_overlayWindow.subviews indexOfObject:_pickDotView],
         (unsigned long)_overlayWindow.subviews.count]);
 }
@@ -1305,12 +1305,12 @@ static NSString *vcamLightColorName(uint32_t c) {
         gVcamPick.py = c.y;
         NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
             [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
-        dict[obfN(521)] = @(c.x);
-        dict[obfN(522)] = @(c.y);
+        dict[obfN(525)] = @(c.x);
+        dict[obfN(526)] = @(c.y);
         [dict writeToFile:ovf2() atomically:YES];
         // 1.3.67: 新坐标下行 App 采样器(Darwin cfg, 松手才 post = 低频)
         [VCamNotify qvPc:YES X:c.x Y:c.y];
-        vcam_ball_log([NSString stringWithFormat:obfN(525), c.x, c.y]);
+        vcam_ball_log([NSString stringWithFormat:obfN(529), c.x, c.y]);
     }
 }
 
@@ -1337,17 +1337,17 @@ static NSString *vcamLightColorName(uint32_t c) {
                 const char *n = class_getName(classes[i]);
                 if (!n) continue;
                 NSString *name = [NSString stringWithUTF8String:n];
-                if ([name containsString:obfN(526)] || [name containsString:obfN(527)]) {
+                if ([name containsString:obfN(530)] || [name containsString:obfN(531)]) {
                     [hits addObject:name];
                     if (hits.count >= 40) break;
                 }
             }
             free(classes);
             vcam_ball_log([NSString stringWithFormat:
-                obfN(528), hits]);
+                obfN(532), hits]);
         }
     }
-    vcam_ball_log(obfN(529));
+    vcam_ball_log(obfN(533));
 }
 
 // 检测 timer(0.05s, 后台串行队列): 消费捕获线程结果 + 看门狗 + UICSI 回退
@@ -1356,8 +1356,8 @@ static NSString *vcamLightColorName(uint32_t c) {
     // 共享状态复位 + 位置初值(取色点位置由拖动松手时更新)
     gVcamPick.running = 1;
     NSDictionary *pl = [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{};
-    double px = [pl[obfN(521)] doubleValue];
-    double py = [pl[obfN(522)] doubleValue];
+    double px = [pl[obfN(525)] doubleValue];
+    double py = [pl[obfN(526)] doubleValue];
     if (px <= 0 || py <= 0) {
         CGRect sb = [UIScreen mainScreen].bounds;
         px = sb.size.width / 2; py = sb.size.height / 2;
@@ -1392,14 +1392,14 @@ static NSString *vcamLightColorName(uint32_t c) {
         if (strongSelf) [strongSelf colorPickTick];
     });
     dispatch_resume(_colorPickTimer);
-    vcam_ball_log(obfN(530));
+    vcam_ball_log(obfN(534));
 }
 
 - (void)stopColorPickup {
     if (_colorPickTimer) {
         dispatch_source_cancel(_colorPickTimer);
         _colorPickTimer = nil;
-        vcam_ball_log(obfN(531));
+        vcam_ball_log(obfN(535));
     }
     gVcamPick.running = 0;  // 捕获线程自然退出(卡死线程除外, 无害)
 }
@@ -1480,8 +1480,8 @@ static NSString *vcamLightColorName(uint32_t c) {
     if (CFAbsoluteTimeGetCurrent() - lastTickLog > 1.0) {
         lastTickLog = CFAbsoluteTimeGetCurrent();
         vcam_ball_log([NSString stringWithFormat:
-            obfN(532),
-            tickCount, _pickFastMode ? obfN(533) : obfN(534),
+            obfN(536),
+            tickCount, _pickFastMode ? obfN(537) : obfN(538),
             gVcamPick.currentStrategy, gVcamPick.threadAlive,
             (unsigned long long)gVcamPick.seq,
             CFAbsoluteTimeGetCurrent() - gVcamPick.heartbeat]);
@@ -1500,8 +1500,8 @@ static NSString *vcamLightColorName(uint32_t c) {
                                   (uint64_t)(iv * NSEC_PER_SEC),
                                   (uint64_t)((wantFast ? 0.015 : 0.03) * NSEC_PER_SEC));
         vcam_ball_log([NSString stringWithFormat:
-            obfN(535), wantFast ? obfN(534) : obfN(536),
-            wantFast ? obfN(537) : obfN(538)]);
+            obfN(539), wantFast ? obfN(538) : obfN(540),
+            wantFast ? obfN(541) : obfN(542)]);
     }
 
     static int diagTicks = 0;
@@ -1518,7 +1518,7 @@ static NSString *vcamLightColorName(uint32_t c) {
             gVcamPickStrategyFailed[curStrategy] = YES;
             gVcamPick.threadAlive = 0;  // 逻辑弃置(物理线程卡在 mach_msg)
             vcam_ball_log([NSString stringWithFormat:
-                obfN(539),
+                obfN(543),
                 curStrategy, CFAbsoluteTimeGetCurrent() - hb]);
             [self launchPickCaptureThread];  // 下一策略或 UICSI 模式
         }
@@ -1544,7 +1544,7 @@ static NSString *vcamLightColorName(uint32_t c) {
         double nowMask = CFAbsoluteTimeGetCurrent();
         if (nowMask - lastMaskLog > 2.0) {
             lastMaskLog = nowMask;
-            vcam_ball_log(obfN(540));
+            vcam_ball_log(obfN(544));
         }
         return;
     }
@@ -1563,7 +1563,7 @@ static NSString *vcamLightColorName(uint32_t c) {
             if (diagTicks < 8) {
                 diagTicks++;
                 vcam_ball_log([NSString stringWithFormat:
-                    obfN(541),
+                    obfN(545),
                     diagTicks, gVcamPick.currentStrategy, detected, detCount,
                     gVcamPick.px, gVcamPick.py]);
             }
@@ -1576,7 +1576,7 @@ static NSString *vcamLightColorName(uint32_t c) {
         if (diagTicks < 8) {
             diagTicks++;
             vcam_ball_log([NSString stringWithFormat:
-                obfN(542),
+                obfN(546),
                 diagTicks, detSlot, detCount, gVcamPick.px, gVcamPick.py]);
         }
     }
@@ -1600,8 +1600,8 @@ static NSString *vcamLightColorName(uint32_t c) {
             [self updateColorPreview:d];
         });
         vcam_ball_log([NSString stringWithFormat:
-            obfN(543),
-            d, detName ?: obfN(544), detSlot, detCount, gVcamPick.avg]);
+            obfN(547),
+            d, detName ?: obfN(548), detSlot, detCount, gVcamPick.avg]);
     }
 }
 
@@ -1609,12 +1609,12 @@ static NSString *vcamLightColorName(uint32_t c) {
 - (void)updateColorPreview:(uint32_t)color {
     if (color == 0) {
         _lightColorSwatch.backgroundColor = [UIColor colorWithWhite:1 alpha:0.12];
-        _lightColorLabel.text = obfN(481);
+        _lightColorLabel.text = obfN(485);
     } else {
         _lightColorSwatch.backgroundColor = [UIColor colorWithRed:((color >> 16) & 0xFF) / 255.0
                                                              green:((color >> 8) & 0xFF) / 255.0
                                                               blue:(color & 0xFF) / 255.0 alpha:1];
-        _lightColorLabel.text = [NSString stringWithFormat:obfN(545),
+        _lightColorLabel.text = [NSString stringWithFormat:obfN(549),
                                  vcamLightColorName(color),
                                  (int)((color >> 16) & 0xFF),
                                  (int)((color >> 8) & 0xFF),
@@ -1624,23 +1624,23 @@ static NSString *vcamLightColorName(uint32_t c) {
 
 // ===== 打光参数滑块(节流写: 拖动中 0.12s 合并落盘一次, Android 同款思路) =====
 - (void)lightIntensityChanged:(UISlider *)s {
-    _lightIntensityValue.text = [NSString stringWithFormat:obfN(492), (int)lroundf(s.value)];
+    _lightIntensityValue.text = [NSString stringWithFormat:obfN(496), (int)lroundf(s.value)];
     [self scheduleLightParamsFlush];
 }
 - (void)lightDiameterChanged:(UISlider *)s {
-    _lightDiameterValue.text = [NSString stringWithFormat:obfN(492), (int)lroundf(s.value)];
+    _lightDiameterValue.text = [NSString stringWithFormat:obfN(496), (int)lroundf(s.value)];
     [self scheduleLightParamsFlush];
 }
 - (void)lightXChanged:(UISlider *)s {
-    _lightXValue.text = [NSString stringWithFormat:obfN(492), (int)lroundf(s.value)];
+    _lightXValue.text = [NSString stringWithFormat:obfN(496), (int)lroundf(s.value)];
     [self scheduleLightParamsFlush];
 }
 - (void)lightYChanged:(UISlider *)s {
-    _lightYValue.text = [NSString stringWithFormat:obfN(492), (int)lroundf(s.value)];
+    _lightYValue.text = [NSString stringWithFormat:obfN(496), (int)lroundf(s.value)];
     [self scheduleLightParamsFlush];
 }
 - (void)lightFeatherChanged:(UISlider *)s {
-    _lightFeatherValue.text = [NSString stringWithFormat:obfN(492), (int)lroundf(s.value)];
+    _lightFeatherValue.text = [NSString stringWithFormat:obfN(496), (int)lroundf(s.value)];
     [self scheduleLightParamsFlush];
 }
 
@@ -1672,7 +1672,7 @@ static NSString *vcamLightColorName(uint32_t c) {
 }
 
 - (void)settingsTabTapped {
-    vcam_ball_log(obfN(546));
+    vcam_ball_log(obfN(550));
     _controlPageView.hidden = YES;
     _lightPageView.hidden = YES;
     _settingsPageView.hidden = NO;
@@ -1684,7 +1684,7 @@ static NSString *vcamLightColorName(uint32_t c) {
 #pragma mark - 交互
 
 - (void)ballTapped:(UITapGestureRecognizer *)gesture {
-    vcam_ball_log(obfN(547));
+    vcam_ball_log(obfN(551));
     [self togglePanel];
 }
 
@@ -1746,7 +1746,7 @@ static NSString *vcamLightColorName(uint32_t c) {
 
 // 播: 从头重播当前视频(restartToken 自增, mediaserverd 轮询触发重载)
 - (void)restartVideoTapped {
-    vcam_ball_log(obfN(548));
+    vcam_ball_log(obfN(552));
     [VCamNotify bumpRestartToken];
 }
 
@@ -1757,10 +1757,10 @@ static NSString *vcamLightColorName(uint32_t c) {
     UIImageSymbolConfiguration *cfg =
         [UIImageSymbolConfiguration configurationWithPointSize:14
                                                        weight:UIImageSymbolWeightSemibold];
-    UIImage *sym = [UIImage systemImageNamed:(_isPaused ? obfN(549) : obfN(466))
+    UIImage *sym = [UIImage systemImageNamed:(_isPaused ? obfN(553) : obfN(470))
                             withConfiguration:cfg];
     [self.playPauseBtn setImage:sym forState:UIControlStateNormal];
-    vcam_ball_log([NSString stringWithFormat:obfN(550), _isPaused ? obfN(162) : obfN(551)]);
+    vcam_ball_log([NSString stringWithFormat:obfN(554), _isPaused ? obfN(162) : obfN(555)]);
 }
 
 // 替/原: 替换摄像头 ↔ 还原摄像头(图标按钮, 白色边框=替换开启)
@@ -1768,7 +1768,7 @@ static NSString *vcamLightColorName(uint32_t c) {
     // 密钥门禁(1.3.54): 未激活直接弹激活页, 不写 enabled(mediaserverd 侧
     // render 入口另有硬拦截, 此处是 UI 层引导)
     if (![VCamNotify qvLv]) {
-        vcam_ball_log(obfN(552));
+        vcam_ball_log(obfN(556));
         [self showLicensePage];
         return;
     }
@@ -1776,7 +1776,7 @@ static NSString *vcamLightColorName(uint32_t c) {
     [VCamNotify setPlistEnabled:newEnabled];
     [[VCamCore sharedInstance] setEnabled:newEnabled];
     [self updateReplaceButtonVisual];
-    vcam_ball_log([NSString stringWithFormat:obfN(553), newEnabled ? obfN(554) : obfN(555)]);
+    vcam_ball_log([NSString stringWithFormat:obfN(557), newEnabled ? obfN(558) : obfN(559)]);
 }
 
 - (void)updateReplaceButtonVisual {
@@ -1814,19 +1814,19 @@ static NSString *vcamLightColorName(uint32_t c) {
     [VCamNotify setPlistFrontPanFix:on];
     [self updatePanArrowVisual];
     vcam_ball_log([NSString stringWithFormat:
-        obfN(556),
-        on ? obfN(557) : obfN(558)]);
+        obfN(560),
+        on ? obfN(561) : obfN(562)]);
 }
 
 // 占位按钮(↑←↓→ − ＋ 复): 功能待后续版本定义, 仅记录点击
 // (1/2/3/4 槽位键 1.3.45 已激活绑定, 不再占位)
 - (void)placeholderTapped {
-    vcam_ball_log(obfN(559));
+    vcam_ball_log(obfN(563));
 }
 
 // 关: 只收起面板(悬浮球保持显示), 再点悬浮球即可重新打开
 - (void)closePanelTapped {
-    vcam_ball_log(obfN(560));
+    vcam_ball_log(obfN(564));
     if (_panelVisible) {
         _panelVisible = NO;
         [UIView animateWithDuration:0.15 animations:^{
@@ -1848,14 +1848,14 @@ static NSString *vcamLightColorName(uint32_t c) {
 - (void)playSlot:(NSInteger)slot {
     // 密钥门禁(1.3.54): 未激活不自动开启替换(与"替"按钮同一门禁)
     if (![VCamNotify qvLv]) {
-        vcam_ball_log([NSString stringWithFormat:obfN(561), (long)slot]);
+        vcam_ball_log([NSString stringWithFormat:obfN(565), (long)slot]);
         [self showLicensePage];
         return;
     }
     NSString *path = (slot == 1) ? obfN(137)
-                                 : [NSString stringWithFormat:obfN(562), (long)slot];
+                                 : [NSString stringWithFormat:obfN(566), (long)slot];
     if (![[NSFileManager defaultManager] fileExistsAtPath:path]) {
-        vcam_ball_log([NSString stringWithFormat:obfN(563), (long)slot, path]);
+        vcam_ball_log([NSString stringWithFormat:obfN(567), (long)slot, path]);
         return;
     }
     // 路径变化 → mediaserverd 轮询自动重载; 若替换未开则同时开启
@@ -1867,7 +1867,7 @@ static NSString *vcamLightColorName(uint32_t c) {
         [[VCamCore sharedInstance] setEnabled:YES];
         [self updateReplaceButtonVisual];
     }
-    vcam_ball_log([NSString stringWithFormat:obfN(564), (long)slot, path]);
+    vcam_ball_log([NSString stringWithFormat:obfN(568), (long)slot, path]);
 }
 
 // 转: 顺时针旋转 90°
@@ -1877,7 +1877,7 @@ static NSString *vcamLightColorName(uint32_t c) {
     int oldAngle = (int)[VCamNotify plistRotation];
     int newAngle = (oldAngle + 90) % 360;
     [VCamNotify setPlistRotation:newAngle];
-    vcam_ball_log([NSString stringWithFormat:obfN(565), oldAngle, newAngle]);
+    vcam_ball_log([NSString stringWithFormat:obfN(569), oldAngle, newAngle]);
 }
 
 #pragma mark - 用户画面变换(箭头/＋/−/复, 1.3.30)
@@ -1908,7 +1908,7 @@ static double vcamClamp(double v, double lo, double hi) {
     double ny = vcamClamp([VCamNotify plistPanY] + dy, -1.0, 1.0);
     [VCamNotify setPlistPanX:nx];
     [VCamNotify setPlistPanY:ny];
-    vcam_ball_log([NSString stringWithFormat:obfN(566), nx, ny]);
+    vcam_ball_log([NSString stringWithFormat:obfN(570), nx, ny]);
 }
 
 - (void)panLeftTapped  { [self panByX:-vcamTPanStep() Y:0]; }  // 画面左移
@@ -1920,20 +1920,20 @@ static double vcamClamp(double v, double lo, double hi) {
     double nz = vcamClamp([VCamNotify plistZoom] * vcamTZoomFactor(),
                           vcamTZoomMin(), vcamTZoomMax());
     [VCamNotify setPlistZoom:nz];
-    vcam_ball_log([NSString stringWithFormat:obfN(567), nz]);
+    vcam_ball_log([NSString stringWithFormat:obfN(571), nz]);
 }
 
 - (void)zoomOutTapped {
     double nz = vcamClamp([VCamNotify plistZoom] / vcamTZoomFactor(),
                           vcamTZoomMin(), vcamTZoomMax());
     [VCamNotify setPlistZoom:nz];
-    vcam_ball_log([NSString stringWithFormat:obfN(568), nz]);
+    vcam_ball_log([NSString stringWithFormat:obfN(572), nz]);
 }
 
 // 复: 还原为最原始画面(未移动未缩放; 不动旋转/镜像 —— 那两个由"转/镜"管理)
 - (void)resetTransformTapped {
     [VCamNotify resetPlistTransform];
-    vcam_ball_log(obfN(569));
+    vcam_ball_log(obfN(573));
 }
 
 // 镜: 镜像翻转(同样以 plist 为单一事实源)
@@ -1941,7 +1941,7 @@ static double vcamClamp(double v, double lo, double hi) {
     BOOL newMirrored = ![VCamNotify plistMirrored];
     [VCamNotify setPlistMirrored:newMirrored];
     [self updateMirrorButtonVisual];
-    vcam_ball_log([NSString stringWithFormat:obfN(570), newMirrored]);
+    vcam_ball_log([NSString stringWithFormat:obfN(574), newMirrored]);
 }
 
 // 切视频时重置手动旋转/镜像: 残留的手动角度会与新视频自带的 preferredRotation
@@ -1952,7 +1952,7 @@ static double vcamClamp(double v, double lo, double hi) {
     [VCamNotify setPlistMirrored:NO];
     [VCamNotify resetPlistTransform];
     [self updateMirrorButtonVisual];
-    vcam_ball_log(obfN(571));
+    vcam_ball_log(obfN(575));
 }
 
 #pragma mark - 视频选择(PHPicker 相册选择器)
@@ -1964,10 +1964,10 @@ static double vcamClamp(double v, double lo, double hi) {
 
 - (void)openPickerForSlot:(NSInteger)slot {
     _pickerSlot = slot;
-    vcam_ball_log([NSString stringWithFormat:obfN(572), (long)slot]);
+    vcam_ball_log([NSString stringWithFormat:obfN(576), (long)slot]);
 
-    if (!NSClassFromString(obfN(573))) {
-        vcam_ball_log(obfN(574));
+    if (!NSClassFromString(obfN(577))) {
+        vcam_ball_log(obfN(578));
         return;
     }
     dispatch_async(dispatch_get_main_queue(), ^{
@@ -1990,11 +1990,11 @@ static double vcamClamp(double v, double lo, double hi) {
 // PHPicker 的 itemProvider 拿到瞬间类型可能尚未异步注册完(hasItemConforming 返回 NO),
 // 配合 caller 的延迟重查兜底
 - (BOOL)providerLooksLikeVideo:(NSItemProvider *)provider {
-    if ([provider hasItemConformingToTypeIdentifier:obfN(575)]) return YES;
-    if ([provider hasItemConformingToTypeIdentifier:obfN(576)]) return YES;
+    if ([provider hasItemConformingToTypeIdentifier:obfN(579)]) return YES;
+    if ([provider hasItemConformingToTypeIdentifier:obfN(580)]) return YES;
     for (NSString *tid in provider.registeredTypeIdentifiers) {
-        if ([tid containsString:obfN(577)] || [tid containsString:obfN(334)] ||
-            [tid containsString:obfN(578)] || [tid containsString:obfN(579)]) {
+        if ([tid containsString:obfN(581)] || [tid containsString:obfN(334)] ||
+            [tid containsString:obfN(582)] || [tid containsString:obfN(583)]) {
             return YES;
         }
     }
@@ -2010,7 +2010,7 @@ static double vcamClamp(double v, double lo, double hi) {
         VCamFloatingBall *strongSelf = weakSelf;
         if (!strongSelf) return;
         if (!url) {
-            vcam_ball_log([NSString stringWithFormat:obfN(580),
+            vcam_ball_log([NSString stringWithFormat:obfN(584),
                            tid, error, (unsigned long)(cands.count - 1)]);
             if (cands.count > 1) {
                 dispatch_async(dispatch_get_main_queue(), ^{
@@ -2030,15 +2030,15 @@ static double vcamClamp(double v, double lo, double hi) {
     // 目标路径: 0=vcam.mp4(当前选择) 2/3=6/N.mp4(预设槽位)
     // (SpringBoard 进程内写入, pathhook 重定向到 mediaserverd 实读的 /rootfs 路径)
     NSString *dest = (slot == 0) ? obfN(137)
-                   : [NSString stringWithFormat:obfN(562), (long)slot];
+                   : [NSString stringWithFormat:obfN(566), (long)slot];
     NSFileManager *fm = [NSFileManager defaultManager];
     [fm createDirectoryAtPath:dest.stringByDeletingLastPathComponent
    withIntermediateDirectories:YES attributes:nil error:nil];
     [fm removeItemAtPath:dest error:nil];
     NSError *copyErr = nil;
     BOOL ok = [fm copyItemAtPath:srcUrl.path toPath:dest error:&copyErr];
-    vcam_ball_log([NSString stringWithFormat:obfN(581),
-                   (long)slot, srcUrl.path, dest, ok ? obfN(431) : [copyErr localizedDescription]]);
+    vcam_ball_log([NSString stringWithFormat:obfN(585),
+                   (long)slot, srcUrl.path, dest, ok ? obfN(435) : [copyErr localizedDescription]]);
 
     // 选择视频(槽位 0): 切为当前源立即播放(路径变化由 mediaserverd 轮询检测重载)
     if (ok && slot == 0) {
@@ -2050,7 +2050,7 @@ static double vcamClamp(double v, double lo, double hi) {
                 [[VCamCore sharedInstance] setEnabled:YES];
                 [self updateReplaceButtonVisual];
             }
-            vcam_ball_log([NSString stringWithFormat:obfN(582), dest]);
+            vcam_ball_log([NSString stringWithFormat:obfN(586), dest]);
         });
     }
     // 预设槽位(2/3): 只存储, 由设置页预设按钮/控制页槽位键播放
@@ -2072,10 +2072,10 @@ static double vcamClamp(double v, double lo, double hi) {
             VCamFloatingBall *strongSelf = weakSelf;
             if (!strongSelf) return;
             if ([strongSelf providerLooksLikeVideo:provider]) {
-                vcam_ball_log(obfN(583));
+                vcam_ball_log(obfN(587));
                 [strongSelf startVideoLoadFromProvider:provider slot:slot];
             } else {
-                vcam_ball_log([NSString stringWithFormat:obfN(584),
+                vcam_ball_log([NSString stringWithFormat:obfN(588),
                                provider.registeredTypeIdentifiers]);
             }
         });
@@ -2087,17 +2087,17 @@ static double vcamClamp(double v, double lo, double hi) {
 // 构造候选类型列表并开始加载(标准 movie 优先, 其余已注册 av 类型逐个兜底)
 - (void)startVideoLoadFromProvider:(NSItemProvider *)provider slot:(NSInteger)slot {
     NSMutableArray<NSString *> *cands = [NSMutableArray array];
-    if ([provider hasItemConformingToTypeIdentifier:obfN(575)]) {
-        [cands addObject:obfN(575)];
+    if ([provider hasItemConformingToTypeIdentifier:obfN(579)]) {
+        [cands addObject:obfN(579)];
     }
     for (NSString *tid in provider.registeredTypeIdentifiers) {
         if ([cands containsObject:tid]) continue;
-        if ([tid containsString:obfN(577)] || [tid containsString:obfN(334)] ||
-            [tid containsString:obfN(578)] || [tid containsString:obfN(579)]) {
+        if ([tid containsString:obfN(581)] || [tid containsString:obfN(334)] ||
+            [tid containsString:obfN(582)] || [tid containsString:obfN(583)]) {
             [cands addObject:tid];
         }
     }
-    if (cands.count == 0) [cands addObject:obfN(575)];
+    if (cands.count == 0) [cands addObject:obfN(579)];
     [self loadVideoFromProvider:provider candidates:cands slot:slot];
 }
 
@@ -2105,7 +2105,7 @@ static double vcamClamp(double v, double lo, double hi) {
 
 // 设置页"密钥验证"入口 → 激活页
 - (void)licenseEntryTapped {
-    vcam_ball_log(obfN(585));
+    vcam_ball_log(obfN(589));
     [self showLicensePage];
 }
 
@@ -2127,12 +2127,12 @@ static double vcamClamp(double v, double lo, double hi) {
 // (1.3.55: 不再把已存密钥回填输入框 —— 签名 blob ~88 位太长, 展示无意义)
 - (void)refreshLicenseStatus {
     if ([VCamNotify qvLv]) {
-        _licenseStatusLabel.text = obfN(586);
+        _licenseStatusLabel.text = obfN(590);
         _licenseStatusLabel.textColor = [UIColor colorWithRed:0.30 green:0.85 blue:0.45 alpha:1.0];
         _licenseField.text = obfN(125);
         _licenseField.enabled = NO;
     } else {
-        _licenseStatusLabel.text = obfN(587);
+        _licenseStatusLabel.text = obfN(591);
         _licenseStatusLabel.textColor = [UIColor colorWithRed:0.95 green:0.40 blue:0.40 alpha:1.0];
         _licenseField.enabled = YES;
     }
@@ -2142,12 +2142,12 @@ static double vcamClamp(double v, double lo, double hi) {
 - (void)licenseCopyTapped {
     UIPasteboard *pb = [UIPasteboard generalPasteboard];
     pb.string = vcamGrouped16([VCamNotify qvDc]);
-    _licenseCodeHint.text = obfN(588);
+    _licenseCodeHint.text = obfN(592);
     _licenseCodeHint.textColor = [UIColor colorWithRed:0.30 green:0.85 blue:0.45 alpha:1.0];
-    vcam_ball_log(obfN(589));
+    vcam_ball_log(obfN(593));
     dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(2.0 * NSEC_PER_SEC)),
                    dispatch_get_main_queue(), ^{
-        self->_licenseCodeHint.text = obfN(506);
+        self->_licenseCodeHint.text = obfN(510);
         self->_licenseCodeHint.textColor = [UIColor colorWithRed:0.72 green:0.73 blue:0.75 alpha:1.0];
     });
 }
@@ -2164,7 +2164,7 @@ static double vcamClamp(double v, double lo, double hi) {
                 _licenseField.text = s;
                 [_licenseField becomeFirstResponder];
             });
-            vcam_ball_log([NSString stringWithFormat:obfN(590), (unsigned long)s.length]);
+            vcam_ball_log([NSString stringWithFormat:obfN(594), (unsigned long)s.length]);
         }
     });
 }
@@ -2177,11 +2177,11 @@ static double vcamClamp(double v, double lo, double hi) {
     if (ok) {
         [self refreshLicenseStatus];
         [_licenseField resignFirstResponder];  // 收键盘
-        vcam_ball_log(obfN(591));
+        vcam_ball_log(obfN(595));
     } else {
-        _licenseStatusLabel.text = obfN(592);
+        _licenseStatusLabel.text = obfN(596);
         _licenseStatusLabel.textColor = [UIColor colorWithRed:0.95 green:0.40 blue:0.40 alpha:1.0];
-        vcam_ball_log(obfN(593));
+        vcam_ball_log(obfN(597));
     }
 }
 
@@ -2194,12 +2194,12 @@ static double vcamClamp(double v, double lo, double hi) {
 #pragma mark - 前后台切换
 
 - (void)appDidBecomeActive:(NSNotification *)notification {
-    vcam_ball_log(obfN(594));
+    vcam_ball_log(obfN(598));
 
     dispatch_async(dispatch_get_main_queue(), ^{
         // 启动早期 scene 未连接时 window 未关联 scene（不可见），此时补建
         if (self->_isFloating && self.overlayWindow && self.overlayWindow.windowScene == nil) {
-            vcam_ball_log(obfN(595));
+            vcam_ball_log(obfN(599));
             [self.overlayWindow removeFromSuperview];
             self.overlayWindow = nil;
             [self createOverlayWindow];
@@ -2208,7 +2208,7 @@ static double vcamClamp(double v, double lo, double hi) {
 }
 
 - (void)appDidEnterBackground:(NSNotification *)notification {
-    vcam_ball_log(obfN(596));
+    vcam_ball_log(obfN(600));
 }
 
 @end

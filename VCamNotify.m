@@ -741,18 +741,22 @@ static NSString *vcamPlatformSerial(void) {
 // 公钥 = X9.63 未压缩 65 字节(hex 嵌入, 混淆字符串层加密)。
 // 私钥仅存在于开发机 license_priv.pem, 永不上设备 —— 逆向再彻底也无法
 // 伪造密钥(数学保证, 非混淆保证)
+// 支持 v2: sig.t_enc (永久卡) 和 v3: sig.t_enc.expiryInfo (月卡)
 + (BOOL)vcamLicenseVerifyBlob:(NSString *)blob {
     if (![blob isKindOfClass:[NSString class]]) return NO;
     // 1.3.63 方案A: blob v2 = base64(DER 签名) "." base64(T_enc 72B)。
+    // 1.3.78 方案B: blob v3 = base64(DER 签名) "." base64(T_enc) "." base64(expiryInfo) (月卡)
     // 旧格式(无 "." 段)fail-closed —— 验签消息升级为 设备码||T_enc
-    NSRange dot = [blob rangeOfString:@"."];
-    if (dot.location == NSNotFound || dot.location == 0 ||
-        dot.location + 1 >= blob.length) return NO;
+    NSArray *parts = [blob componentsSeparatedByString:@"."];
+    if (parts.count != 2 && parts.count != 3) return NO;
+    if (parts[0].length == 0 || parts[1].length == 0) return NO;
+    if (parts.count == 3 && parts[2].length == 0) return NO;
+    
     NSData *sig = [[NSData alloc] initWithBase64EncodedString:
-        [blob substringToIndex:dot.location]
+        parts[0]
         options:NSDataBase64DecodingIgnoreUnknownCharacters];
     NSData *tEnc = [[NSData alloc] initWithBase64EncodedString:
-        [blob substringFromIndex:dot.location + 1]
+        parts[1]
         options:NSDataBase64DecodingIgnoreUnknownCharacters];
     // DER P-256 签名 = 0x30 开头的 SEQUENCE, 66~72 字节(r/s 前导零致不定长;
     // 此处只做快速 fail-closed, 真正解析由 SecKeyVerifySignature 完成)
@@ -858,7 +862,55 @@ static NSString *vcamPlatformSerial(void) {
     return sigOK;
 }
 
-// 已激活: plist licBlob 对本机设备码验签通过。0.5s 节流缓存(ECDSA ~1ms,
+// 提取 blob 中的过期信息 (v3 格式: sig.t_enc.expiryInfo)
+// 返回 NSDictionary: @{@"expiryDays": @(days), @"activatedAt": @(ts)}
+// v2 格式返回 nil (永久卡)
++ (NSDictionary *)vcamLicenseExpiryInfoFromBlob:(NSString *)blob {
+    if (![blob isKindOfClass:[NSString class]]) return nil;
+    NSArray *parts = [blob componentsSeparatedByString:@"."];
+    if (parts.count != 3) return nil; // v2 格式无过期信息
+    
+    NSString *expiryB64 = parts[2];
+    NSData *expiryData = [[NSData alloc] initWithBase64EncodedString:expiryB64
+        options:NSDataBase64DecodingIgnoreUnknownCharacters];
+    if (!expiryData) return nil;
+    
+    NSString *expiryJson = [[NSString alloc] initWithData:expiryData encoding:NSUTF8StringEncoding];
+    if (!expiryJson) return nil;
+    
+    NSError *err = nil;
+    NSDictionary *info = [NSJSONSerialization JSONObjectWithData:expiryData
+        options:0 error:&err];
+    if (err || !info) return nil;
+    
+    NSNumber *expiryDays = info[@"expiryDays"];
+    NSNumber *activatedAt = info[@"activatedAt"];
+    if (!expiryDays || !activatedAt) return nil;
+    
+    return @{@"expiryDays": expiryDays, @"activatedAt": activatedAt};
+}
+
+// 检查许可证是否过期
+// 返回 YES 表示未过期/永久卡，NO 表示已过期
++ (BOOL)vcamLicenseCheckExpiry:(NSString *)blob {
+    NSDictionary *expiryInfo = [self vcamLicenseExpiryInfoFromBlob:blob];
+    if (!expiryInfo) return YES; // v2 格式 = 永久卡
+    
+    NSNumber *expiryDays = expiryInfo[@"expiryDays"];
+    NSNumber *activatedAt = expiryInfo[@"activatedAt"];
+    if (!expiryDays || !activatedAt) return NO; // 格式错误视为过期
+    
+    long long days = [expiryDays longLongValue];
+    double activated = [activatedAt doubleValue];
+    if (days <= 0) return YES; // 0 或负数 = 永久
+    
+    double now = [NSDate timeIntervalSinceReferenceDate];
+    double expiryTime = activated + days * 86400.0; // 86400 秒/天
+    
+    return now < expiryTime;
+}
+
+// 已激活: plist licBlob 对本机设备码验签通过 + 过期检查。0.5s 节流缓存(ECDSA ~1ms,
 // 0.15s 轮询全验签无必要; 激活写入后 0.5s 内过期重验, md 下一拍生效)
 + (BOOL)vcamLicenseValid {
     @synchronized ([VCamNotify class]) {
@@ -870,7 +922,12 @@ static NSString *vcamPlatformSerial(void) {
         NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
         if (!dict) dict = [NSDictionary dictionaryWithContentsOfFile:VCamStateBackupPath];
         NSString *blob = dict[@"licBlob"];
-        cached = [blob isKindOfClass:[NSString class]] && [self vcamLicenseVerifyBlob:blob];
+        BOOL valid = [blob isKindOfClass:[NSString class]] && [self vcamLicenseVerifyBlob:blob];
+        // 额外检查过期
+        if (valid) {
+            valid = [self vcamLicenseCheckExpiry:blob];
+        }
+        cached = valid;
         cachedAt = now;
         hasCache = YES;
         return cached;
@@ -878,18 +935,32 @@ static NSString *vcamPlatformSerial(void) {
 }
 
 // 激活: 输入密钥(base64, 区分大小写, 仅去空白/换行)验签通过 → 写
-// licBlob/activated/dcPub。mediaserverd 0.15s 轮询下一拍即生效
+// licBlob/activated/dcPub/expiryInfo。mediaserverd 0.15s 轮询下一拍即生效
 + (BOOL)vcamActivateLicense:(NSString *)input {
     if (![input isKindOfClass:[NSString class]]) return NO;
     NSString *blob = [[input componentsSeparatedByCharactersInSet:
         [NSCharacterSet whitespaceAndNewlineCharacterSet]]
         componentsJoinedByString:@""];
     if (![self vcamLicenseVerifyBlob:blob]) return NO;
+    
+    // 提取过期信息 (v3 格式)
+    NSDictionary *expiryInfo = [self vcamLicenseExpiryInfoFromBlob:blob];
+    
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
         [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
     dict[@"licBlob"] = blob;
     dict[@"activated"] = @YES;
     dict[@"dcPub"] = [self vcamDeviceCode];
+    
+    // 如果是月卡，记录激活时间和过期天数
+    if (expiryInfo) {
+        NSNumber *expiryDays = expiryInfo[@"expiryDays"];
+        if (expiryDays && [expiryDays longLongValue] > 0) {
+            dict[@"licExpiryDays"] = expiryDays;
+            dict[@"licActivatedAt"] = @([NSDate timeIntervalSinceReferenceDate]);
+        }
+    }
+    
     [dict writeToFile:VCamPlistPath atomically:YES];
     [dict writeToFile:VCamStateBackupPath atomically:YES];
     return YES;

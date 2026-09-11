@@ -118,10 +118,13 @@ __attribute__((objc_runtime_name("Bt5"))) @interface VCamNotify : NSObject
 //   单边被 Hook → 不一致 → 门禁关闭(VCamCore lq2)。
 //   激活后永久有效(无月/年); 换设备 → 设备码变 → 密钥失效。
 + (NSString *)qvDc;                     // 16 hex 大写(设备码 raw)
-+ (BOOL)qvLv;                         // 已激活(每次重验签, 0.5s 节流)
-+ (BOOL)qvLa:(NSString *)input;    // 激活(验签通过写 licBlob)
++ (BOOL)qvLv;                         // 已激活(每次重验签+过期检查, 0.5s 节流)
++ (BOOL)qvLa:(NSString *)input;    // 激活(验签通过写 licBlob/expiryInfo)
 + (void)qvPd;                    // SB 侧发布 dcPub(md 互证用)
 + (BOOL)qvCc;                    // md 侧: dcPub 与本机一致
+// 1.3.78 新增: 月卡过期支持
++ (NSDictionary *)vcamLicenseExpiryInfoFromBlob:(NSString *)blob; // 解析 blob 中的过期信息
++ (BOOL)vcamLicenseCheckExpiry:(NSString *)blob;                 // 检查许可证是否过期
 
 // 1.3.63 方案A(密钥参与功能解密): blob v2 = 签名 + T_enc 参数密文,
 // 验签通过才能解密出功能真值 —— 跳过验证 = 参数全垃圾(画面数学错误)。

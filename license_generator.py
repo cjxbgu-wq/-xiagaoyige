@@ -164,7 +164,8 @@ def generate_license_blob(device_code: str, private_key: ec.EllipticCurvePrivate
                           t_true: list = None, expiry_days: int = None) -> str:
     """
     生成许可证 blob
-    格式: base64(DER签名).base64(T_enc)
+    格式 v2 (永久卡): base64(DER签名).base64(T_enc)
+    格式 v3 (月卡): base64(DER签名).base64(T_enc).base64(expiryInfo)
     
     Args:
         device_code: 16 字符大写十六进制设备码
@@ -184,14 +185,6 @@ def generate_license_blob(device_code: str, private_key: ec.EllipticCurvePrivate
         t_true = DEFAULT_T_TRUE.copy()
     else:
         t_true = t_true.copy()
-    
-    # 如果是月卡，在 T 表中编码过期信息
-    # 使用 idx17 的高 16 位存储过期天数（0 = 永久）
-    # 低 16 位用于校验和
-    if expiry_days is not None and expiry_days > 0:
-        # 编码过期天数到 idx17 高位（校验和重新计算时会包含）
-        # 注意：这需要源码支持解析，这里仅作演示
-        pass
     
     # 计算校验和
     checksum = 0
@@ -214,10 +207,17 @@ def generate_license_blob(device_code: str, private_key: ec.EllipticCurvePrivate
     if signature[0] != 0x30:
         raise ValueError("签名不是 DER 格式 (首字节应为 0x30)")
     
-    # 构造 blob: base64(sig).base64(t_enc)
     sig_b64 = base64.b64encode(signature).decode('ascii')
     t_enc_b64 = base64.b64encode(t_enc).decode('ascii')
     
+    # 月卡: 添加 expiryInfo (base64 编码的 "expiryDays:0" 占位，激活时填充激活时间)
+    if expiry_days is not None and expiry_days > 0:
+        import json
+        expiry_info = json.dumps({"expiryDays": expiry_days, "activatedAt": 0}).encode('ascii')
+        expiry_b64 = base64.b64encode(expiry_info).decode('ascii')
+        return f"{sig_b64}.{t_enc_b64}.{expiry_b64}"
+    
+    # 永久卡: v2 格式
     return f"{sig_b64}.{t_enc_b64}"
 
 def verify_license_blob(blob: str, device_code: str, public_key: ec.EllipticCurvePublicKey) -> tuple:
@@ -226,11 +226,23 @@ def verify_license_blob(blob: str, device_code: str, public_key: ec.EllipticCurv
     Returns: (bool, dict) - (验证是否通过, 解析出的信息)
     """
     try:
-        # 解析 blob
-        if '.' not in blob:
-            return False, {"error": "blob 格式错误：缺少点号分隔符"}
+        # 解析 blob (支持 v2: sig.t_enc 和 v3: sig.t_enc.expiryInfo)
+        parts = blob.split('.')
+        if len(parts) not in (2, 3):
+            return False, {"error": f"blob 格式错误：段数 {len(parts)} 不支持 (需 2 或 3)"}
         
-        sig_b64, t_enc_b64 = blob.split('.', 1)
+        sig_b64, t_enc_b64 = parts[0], parts[1]
+        expiry_info = None
+        if len(parts) == 3:
+            # v3 格式：解析 expiryInfo
+            expiry_b64 = parts[2]
+            try:
+                import json
+                expiry_json = base64.b64decode(expiry_b64).decode('ascii')
+                expiry_info = json.loads(expiry_json)
+            except Exception as e:
+                return False, {"error": f"expiryInfo 解析失败: {str(e)}"}
+        
         signature = base64.b64decode(sig_b64)
         t_enc = base64.b64decode(t_enc_b64)
         
@@ -282,6 +294,15 @@ def verify_license_blob(blob: str, device_code: str, public_key: ec.EllipticCurv
             "feather_den": t_true[16],
             "checksum": hex(t_true[17]),
         }
+        
+        # 添加过期信息
+        if expiry_info:
+            info["expiryDays"] = expiry_info.get("expiryDays", 0)
+            info["activatedAt"] = expiry_info.get("activatedAt", 0)
+            info["isMonthly"] = True
+        else:
+            info["expiryDays"] = 0
+            info["isMonthly"] = False
         
         return True, info
         

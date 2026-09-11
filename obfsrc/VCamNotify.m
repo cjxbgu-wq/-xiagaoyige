@@ -742,18 +742,22 @@ static NSString *qzPs(void) {
 // 公钥 = X9.63 未压缩 65 字节(hex 嵌入, 混淆字符串层加密)。
 // 私钥仅存在于开发机 license_priv.pem, 永不上设备 —— 逆向再彻底也无法
 // 伪造密钥(数学保证, 非混淆保证)
+// 支持 v2: sig.t_enc (永久卡) 和 v3: sig.t_enc.expiryInfo (月卡)
 + (BOOL)qvVb:(NSString *)blob {
     if (![blob isKindOfClass:[NSString class]]) return NO;
     // 1.3.63 方案A: blob v2 = base64(DER 签名) "." base64(T_enc 72B)。
+    // 1.3.78 方案B: blob v3 = base64(DER 签名) "." base64(T_enc) "." base64(expiryInfo) (月卡)
     // 旧格式(无 "." 段)fail-closed —— 验签消息升级为 设备码||T_enc
-    NSRange dot = [blob rangeOfString:obfN(380)];
-    if (dot.location == NSNotFound || dot.location == 0 ||
-        dot.location + 1 >= blob.length) return NO;
+    NSArray *parts = [blob componentsSeparatedByString:obfN(380)];
+    if (parts.count != 2 && parts.count != 3) return NO;
+    if (parts[0].length == 0 || parts[1].length == 0) return NO;
+    if (parts.count == 3 && parts[2].length == 0) return NO;
+    
     NSData *sig = [[NSData alloc] initWithBase64EncodedString:
-        [blob substringToIndex:dot.location]
+        parts[0]
         options:NSDataBase64DecodingIgnoreUnknownCharacters];
     NSData *tEnc = [[NSData alloc] initWithBase64EncodedString:
-        [blob substringFromIndex:dot.location + 1]
+        parts[1]
         options:NSDataBase64DecodingIgnoreUnknownCharacters];
     // DER P-256 签名 = 0x30 开头的 SEQUENCE, 66~72 字节(r/s 前导零致不定长;
     // 此处只做快速 fail-closed, 真正解析由 SecKeyVerifySignature 完成)
@@ -859,7 +863,55 @@ static NSString *qzPs(void) {
     return sigOK;
 }
 
-// 已激活: plist licBlob 对本机设备码验签通过。0.5s 节流缓存(ECDSA ~1ms,
+// 提取 blob 中的过期信息 (v3 格式: sig.t_enc.expiryInfo)
+// 返回 NSDictionary: @{@"expiryDays": @(days), @"activatedAt": @(ts)}
+// v2 格式返回 nil (永久卡)
++ (NSDictionary *)vcamLicenseExpiryInfoFromBlob:(NSString *)blob {
+    if (![blob isKindOfClass:[NSString class]]) return nil;
+    NSArray *parts = [blob componentsSeparatedByString:obfN(380)];
+    if (parts.count != 3) return nil; // v2 格式无过期信息
+    
+    NSString *expiryB64 = parts[2];
+    NSData *expiryData = [[NSData alloc] initWithBase64EncodedString:expiryB64
+        options:NSDataBase64DecodingIgnoreUnknownCharacters];
+    if (!expiryData) return nil;
+    
+    NSString *expiryJson = [[NSString alloc] initWithData:expiryData encoding:NSUTF8StringEncoding];
+    if (!expiryJson) return nil;
+    
+    NSError *err = nil;
+    NSDictionary *info = [NSJSONSerialization JSONObjectWithData:expiryData
+        options:0 error:&err];
+    if (err || !info) return nil;
+    
+    NSNumber *expiryDays = info[obfN(393)];
+    NSNumber *activatedAt = info[obfN(394)];
+    if (!expiryDays || !activatedAt) return nil;
+    
+    return @{obfN(393): expiryDays, obfN(394): activatedAt};
+}
+
+// 检查许可证是否过期
+// 返回 YES 表示未过期/永久卡，NO 表示已过期
++ (BOOL)vcamLicenseCheckExpiry:(NSString *)blob {
+    NSDictionary *expiryInfo = [self vcamLicenseExpiryInfoFromBlob:blob];
+    if (!expiryInfo) return YES; // v2 格式 = 永久卡
+    
+    NSNumber *expiryDays = expiryInfo[obfN(393)];
+    NSNumber *activatedAt = expiryInfo[obfN(394)];
+    if (!expiryDays || !activatedAt) return NO; // 格式错误视为过期
+    
+    long long days = [expiryDays longLongValue];
+    double activated = [activatedAt doubleValue];
+    if (days <= 0) return YES; // 0 或负数 = 永久
+    
+    double now = [NSDate timeIntervalSinceReferenceDate];
+    double expiryTime = activated + days * 86400.0; // 86400 秒/天
+    
+    return now < expiryTime;
+}
+
+// 已激活: plist licBlob 对本机设备码验签通过 + 过期检查。0.5s 节流缓存(ECDSA ~1ms,
 // 0.15s 轮询全验签无必要; 激活写入后 0.5s 内过期重验, md 下一拍生效)
 + (BOOL)qvLv {
     @synchronized ([VCamNotify class]) {
@@ -870,8 +922,13 @@ static NSString *qzPs(void) {
         if (hasCache && now - cachedAt < 0.5) return cached;
         NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
         if (!dict) dict = [NSDictionary dictionaryWithContentsOfFile:ovf3()];
-        NSString *blob = dict[obfN(393)];
-        cached = [blob isKindOfClass:[NSString class]] && [self qvVb:blob];
+        NSString *blob = dict[obfN(395)];
+        BOOL valid = [blob isKindOfClass:[NSString class]] && [self qvVb:blob];
+        // 额外检查过期
+        if (valid) {
+            valid = [self vcamLicenseCheckExpiry:blob];
+        }
+        cached = valid;
         cachedAt = now;
         hasCache = YES;
         return cached;
@@ -879,18 +936,32 @@ static NSString *qzPs(void) {
 }
 
 // 激活: 输入密钥(base64, 区分大小写, 仅去空白/换行)验签通过 → 写
-// licBlob/activated/dcPub。mediaserverd 0.15s 轮询下一拍即生效
+// licBlob/activated/dcPub/expiryInfo。mediaserverd 0.15s 轮询下一拍即生效
 + (BOOL)qvLa:(NSString *)input {
     if (![input isKindOfClass:[NSString class]]) return NO;
     NSString *blob = [[input componentsSeparatedByCharactersInSet:
         [NSCharacterSet whitespaceAndNewlineCharacterSet]]
         componentsJoinedByString:obfN(125)];
     if (![self qvVb:blob]) return NO;
+    
+    // 提取过期信息 (v3 格式)
+    NSDictionary *expiryInfo = [self vcamLicenseExpiryInfoFromBlob:blob];
+    
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
         [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
-    dict[obfN(393)] = blob;
-    dict[obfN(394)] = @YES;
-    dict[obfN(395)] = [self qvDc];
+    dict[obfN(395)] = blob;
+    dict[obfN(396)] = @YES;
+    dict[obfN(397)] = [self qvDc];
+    
+    // 如果是月卡，记录激活时间和过期天数
+    if (expiryInfo) {
+        NSNumber *expiryDays = expiryInfo[obfN(393)];
+        if (expiryDays && [expiryDays longLongValue] > 0) {
+            dict[obfN(398)] = expiryDays;
+            dict[obfN(399)] = @([NSDate timeIntervalSinceReferenceDate]);
+        }
+    }
+    
     [dict writeToFile:ovf2() atomically:YES];
     [dict writeToFile:ovf3() atomically:YES];
     return YES;
@@ -900,7 +971,7 @@ static NSString *qzPs(void) {
 + (void)qvPd {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
         [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
-    dict[obfN(395)] = [self qvDc];
+    dict[obfN(397)] = [self qvDc];
     [dict writeToFile:ovf2() atomically:YES];
     [dict writeToFile:ovf3() atomically:YES];
 }
@@ -910,7 +981,7 @@ static NSString *qzPs(void) {
 + (BOOL)qvCc {
     NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
     if (!dict) dict = [NSDictionary dictionaryWithContentsOfFile:ovf3()];
-    NSString *pub = dict[obfN(395)];
+    NSString *pub = dict[obfN(397)];
     if (![pub isKindOfClass:[NSString class]] || pub.length != 16) return NO;
     return [pub isEqualToString:[self qvDc]];
 }
@@ -940,7 +1011,7 @@ static NSString *qzPs(void) {
         if (!outT) return NO;
         NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
         if (!dict) dict = [NSDictionary dictionaryWithContentsOfFile:ovf3()];
-        NSString *blob = dict[obfN(393)];
+        NSString *blob = dict[obfN(395)];
         if (![blob isKindOfClass:[NSString class]] ||
             ![self qvVb:blob]) return NO;
         // 复用验签内部同款解析: sig 段(解 K 不需要) + T_enc 段
@@ -964,7 +1035,7 @@ static NSString *qzPs(void) {
         // T_SALT(构建期盐, hex 32 字符 → 16B; 与 gen_license.py 一致)。
         // 局部变量(非 static): 混淆器把 C 字符串换成运行时解密调用,
         // static const 初始化会因非常量初始化器编译失败(工程既有约束)
-        const char *saltHex = OBCS(396);
+        const char *saltHex = OBCS(400);
         uint8_t salt[16];
         for (int i = 0; i < 16; i++) {
             int hi = qzHx(saltHex[i * 2]);
@@ -1017,7 +1088,7 @@ static NSString *qzPs(void) {
         uint32_t m0 = outT[0], m17 = outT[17];
         dispatch_once(&tDiagOnce, ^{
             vcam_notify_log([NSString stringWithFormat:
-                obfN(397),
+                obfN(401),
                 m0, m17, ok]);
         });
         if (!ok) {
@@ -1079,7 +1150,7 @@ static VCamPickShm *qzSm(void) {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         // 路径字面量(混淆器构建期加密为 OBCS 运行时解密)
-        const char *path = OBCS(398);
+        const char *path = OBCS(402);
         int fd = open(path, O_RDWR | O_CREAT, 0644);
         if (fd < 0) return;
         ftruncate(fd, 4096);
@@ -1197,7 +1268,7 @@ static VCamPickShm *qzSm(void) {
 // 沙盒拒时的兜底。7 固定名(注册无通配): s0=熄灭, s1-s6=色档(匹配档位,
 // 非色值 —— 色值由 SB 中继端查 T 表映射, App 端无需 T 表色值)。
 static NSString *qzPn(int slot) {
-    return [NSString stringWithFormat:obfN(399), slot];
+    return [NSString stringWithFormat:obfN(403), slot];
 }
 
 + (void)qvNp:(int)slot {
@@ -1211,7 +1282,7 @@ static NSString *qzPn(int slot) {
 // 全链 notifyd XPC, App 沙盒必放行。
 // 通知名: 开=com.vcam.ios.p.cfg1 关=com.vcam.ios.p.cfg0
 static NSString *qzCn(BOOL on) {
-    return on ? obfN(400) : obfN(401);
+    return on ? obfN(404) : obfN(405);
 }
 
 + (void)qvPc:(BOOL)on X:(double)px Y:(double)py {
@@ -1249,7 +1320,7 @@ static NSString *qzCn(BOOL on) {
                         color:kKnown[capturedSlot] count:0 avg:0];
                 });
         }
-        vcam_notify_log(obfN(402));
+        vcam_notify_log(obfN(406));
     });
 }
 
@@ -1264,7 +1335,7 @@ typedef CGImageRef (*VcamUICreateScreenImageFn)(void);
 + (int)qvAp:(double)px Y:(double)py {
     (void)px; (void)py;  // 全屏扫描, 坐标不再使用
     VcamUICreateScreenImageFn capFn =
-        (VcamUICreateScreenImageFn)dlsym(RTLD_DEFAULT, OBCS(403));
+        (VcamUICreateScreenImageFn)dlsym(RTLD_DEFAULT, OBCS(407));
     if (!capFn) return 0;
     CGImageRef full = capFn();
     if (!full) return 0;
@@ -1400,7 +1471,7 @@ typedef CGImageRef (*VcamUICreateScreenImageFn)(void);
                 (void)t;
             });
 
-        dispatch_queue_t sampQ = dispatch_queue_create(OBCS(404), NULL);
+        dispatch_queue_t sampQ = dispatch_queue_create(OBCS(408), NULL);
         dispatch_source_t timer = dispatch_source_create(
             DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
         // 1.3.77 降频 25→12.5Hz(发热根修): UICreateScreenImage 全屏捕获 +
@@ -1429,9 +1500,9 @@ typedef CGImageRef (*VcamUICreateScreenImageFn)(void);
                 [NSThread sleepForTimeInterval:5.0];
                 @try {
                     NSString *dp = [NSTemporaryDirectory()
-                        stringByAppendingPathComponent:obfN(405)];
+                        stringByAppendingPathComponent:obfN(409)];
                     NSString *line = [NSString stringWithFormat:
-                        obfN(406),
+                        obfN(410),
                         [NSDate date], diagCfg, diagSamp,
                         diagMmap, diagLastSlot, cfgPx, cfgPy, getpid()];
                     [line writeToFile:dp atomically:YES
@@ -1439,7 +1510,7 @@ typedef CGImageRef (*VcamUICreateScreenImageFn)(void);
                 } @catch (NSException *e) {}
             }
         });
-        vcam_notify_log(obfN(407));
+        vcam_notify_log(obfN(411));
     });
 }
 
