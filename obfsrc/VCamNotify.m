@@ -14,35 +14,36 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <notify.h>
+#import "ObfStr.h"
 
-NSString *const VCamNotifyReloadMedia = @"com.vcam.ios.media.reload";
-NSString *const VCamNotifyLiveChanged = @"com.vcam.ios.live.changed";
-NSString *const VCamPlistPath         = @"/var/mobile/Media/DCIM/vc.plist";
-NSString *const VCamStateBackupPath   = @"/var/mobile/vc.plist";
+NSString *ovf1(void) { return obfN(345); }
+NSString *ovf0(void) { return obfN(346); }
+NSString *ovf2(void) { return obfN(0); }
+NSString *ovf3(void) { return obfN(347); }
 
 // 日志总开关(2026-08-16, diskwrites 崩溃循环止血): 默认静默, vc.plist "logEnabled=YES" 打开
 static BOOL vcam_log_enabled(void) {
     static int cached = -1;
     if (cached < 0) {
         @try {
-            NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:@"/var/mobile/Media/DCIM/vc.plist"];
-            if (!d) d = [NSDictionary dictionaryWithContentsOfFile:@"/rootfs/private/var/mobile/Media/DCIM/vc.plist"];
-            if (d) cached = d[@"logEnabled"] ? [d[@"logEnabled"] boolValue] : 0;
+            NSDictionary *d = [NSDictionary dictionaryWithContentsOfFile:obfN(0)];
+            if (!d) d = [NSDictionary dictionaryWithContentsOfFile:obfN(1)];
+            if (d) cached = d[obfN(2)] ? [d[obfN(2)] boolValue] : 0;
         } @catch (NSException *e) {}
     }
     return cached == 1;
 }
 
 // 日志全局限速令牌桶(定义在 VCamCore.m, 全进程共享磁盘写入预算 —— 磁盘配额击杀根治)
-extern BOOL vcam_log_budget_take(void);
+extern BOOL qzbt0(void);
 
 static void vcam_notify_log(NSString *msg) {
     if (!vcam_log_enabled()) return;
-    if (!vcam_log_budget_take()) return;
+    if (!qzbt0()) return;
     @try {
-        NSString *logPath = @"/tmp/vcam_notify_log.txt";
+        NSString *logPath = obfN(348);
         NSString *ts = [NSDate date].description;
-        NSString *entry = [NSString stringWithFormat:@"[%@] %@\n", ts, msg];
+        NSString *entry = [NSString stringWithFormat:obfN(4), ts, msg];
         NSFileHandle *fh = [NSFileHandle fileHandleForWritingAtPath:logPath];
         if (!fh) {
             [entry writeToFile:logPath atomically:YES encoding:NSUTF8StringEncoding error:nil];
@@ -94,7 +95,7 @@ static void vcam_darwin_callback(CFNotificationCenterRef center, void *observer,
 - (instancetype)init {
     self = [super init];
     if (self) {
-        _notifyQueue = dispatch_queue_create("com.vcam.notify", DISPATCH_QUEUE_SERIAL);
+        _notifyQueue = dispatch_queue_create(OBCS(349), DISPATCH_QUEUE_SERIAL);
         _callbacks = [[NSMutableDictionary alloc] init];
         _callbackLock = [[NSLock alloc] init];
         _darwinTokens = [[NSMutableDictionary alloc] init];
@@ -107,7 +108,7 @@ static void vcam_darwin_callback(CFNotificationCenterRef center, void *observer,
 
 - (void)postNotification:(NSString *)name {
     if (!name) return;
-    vcam_notify_log([NSString stringWithFormat:@"[vcam] Posted notification: %@", name]);
+    vcam_notify_log([NSString stringWithFormat:obfN(350), name]);
     CFNotificationCenterPostNotification(
         CFNotificationCenterGetDarwinNotifyCenter(),
         (__bridge CFStringRef)name,
@@ -124,7 +125,7 @@ static void vcam_darwin_callback(CFNotificationCenterRef center, void *observer,
 
     // 包装回调，使其能在 notifyQueue 上执行
     __block VCamNotifyCallback blockCallback = [callback copy];
-    NSDictionary *wrapper = @{@"token": @(token), @"callback": blockCallback};
+    NSDictionary *wrapper = @{obfN(351): @(token), obfN(352): blockCallback};
 
     [_callbackLock lock];
     NSMutableArray *arr = _callbacks[name];
@@ -145,7 +146,7 @@ static void vcam_darwin_callback(CFNotificationCenterRef center, void *observer,
             NULL,
             CFNotificationSuspensionBehaviorDeliverImmediately
         );
-        vcam_notify_log([NSString stringWithFormat:@"[vcam] Registered for notification: %@ (token: %ld)", name, (long)token]);
+        vcam_notify_log([NSString stringWithFormat:obfN(353), name, (long)token]);
     }
 
     return token;
@@ -157,7 +158,7 @@ static void vcam_darwin_callback(CFNotificationCenterRef center, void *observer,
     NSMutableArray *arr = _callbacks[name];
     if (arr) {
         for (NSInteger i = arr.count - 1; i >= 0; i--) {
-            if ([arr[i][@"token"] integerValue] == token) {
+            if ([arr[i][obfN(351)] integerValue] == token) {
                 [arr removeObjectAtIndex:i];
             }
         }
@@ -169,7 +170,7 @@ static void vcam_darwin_callback(CFNotificationCenterRef center, void *observer,
                 NULL
             );
             [_callbacks removeObjectForKey:name];
-            vcam_notify_log([NSString stringWithFormat:@"[vcam] Unregistered notification: %@", name]);
+            vcam_notify_log([NSString stringWithFormat:obfN(354), name]);
         }
     }
     [_callbackLock unlock];
@@ -187,7 +188,7 @@ static void vcam_darwin_callback(CFNotificationCenterRef center, void *observer,
     NSArray *arr = [_callbacks[name] copy];
     [_callbackLock unlock];
     for (NSDictionary *wrapper in arr) {
-        VCamNotifyCallback cb = wrapper[@"callback"];
+        VCamNotifyCallback cb = wrapper[obfN(352)];
         if (cb) {
             dispatch_async(_notifyQueue, ^{
                 cb(name);
@@ -204,7 +205,7 @@ static void vcam_darwin_callback(CFNotificationCenterRef center, void *observer,
     _pollingActive = YES;
     _pollingCallback = [callback copy];
 
-    vcam_notify_log(@"[vcam] State polling timer started");
+    vcam_notify_log(obfN(143));
 
     _pollingTimer = dispatch_source_create(DISPATCH_SOURCE_TYPE_TIMER, 0, 0, _notifyQueue);
     uint64_t intervalNs = interval * NSEC_PER_SEC;
@@ -244,7 +245,7 @@ static void vcam_darwin_callback(CFNotificationCenterRef center, void *observer,
     uint64_t intervalNs = interval * NSEC_PER_SEC;
     dispatch_source_set_timer(_lightPollingTimer, dispatch_time(DISPATCH_TIME_NOW, 0), intervalNs, intervalNs / 2);
     dispatch_source_set_event_handler(_lightPollingTimer, ^{
-        NSDictionary *pl = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
+        NSDictionary *pl = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
         if (self->_lightPollingCallback) {
             self->_lightPollingCallback(pl ?: @{});
         }
@@ -264,229 +265,229 @@ static void vcam_darwin_callback(CFNotificationCenterRef center, void *observer,
 #pragma mark - plist 读写
 
 + (BOOL)isPlistEnabled {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
     if (!dict) {
         // 回退到备份路径
-        dict = [NSDictionary dictionaryWithContentsOfFile:VCamStateBackupPath];
+        dict = [NSDictionary dictionaryWithContentsOfFile:ovf3()];
     }
-    NSNumber *enabled = dict[@"enabled"];
+    NSNumber *enabled = dict[obfN(355)];
     return enabled ? [enabled boolValue] : NO;
 }
 
 + (void)setPlistEnabled:(BOOL)enabled {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"enabled"] = @(enabled);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(355)] = @(enabled);
+    [dict writeToFile:ovf2() atomically:YES];
     // 同步到备份路径
-    [dict writeToFile:VCamStateBackupPath atomically:YES];
+    [dict writeToFile:ovf3() atomically:YES];
 }
 
-+ (NSString *)activePlaybackPath {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    return dict[@"activePlaybackPath"];
++ (NSString *)ap0x {
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    return dict[obfN(159)];
 }
 
-+ (void)setActivePlaybackPath:(NSString *)path {
++ (void)setAp0x:(NSString *)path {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"activePlaybackPath"] = path;
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(159)] = path;
+    [dict writeToFile:ovf2() atomically:YES];
 }
 
 + (NSInteger)plistRotation {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    NSNumber *rot = dict[@"manualRotation"];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    NSNumber *rot = dict[obfN(149)];
     return rot ? [rot integerValue] : 0;
 }
 
 + (void)setPlistRotation:(NSInteger)degrees {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"manualRotation"] = @(degrees);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(149)] = @(degrees);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 
 + (BOOL)plistMirrored {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    NSNumber *m = dict[@"mirrored"];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    NSNumber *m = dict[obfN(150)];
     return m ? [m boolValue] : NO;
 }
 
 + (void)setPlistMirrored:(BOOL)mirrored {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"mirrored"] = @(mirrored);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(150)] = @(mirrored);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 
 #pragma mark - 用户画面变换(箭头/＋/−/复)
 
 + (double)plistPanX {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    NSNumber *v = dict[@"userPanX"];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    NSNumber *v = dict[obfN(153)];
     return v ? [v doubleValue] : 0.0;
 }
 
 + (void)setPlistPanX:(double)panX {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"userPanX"] = @(panX);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(153)] = @(panX);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 
 + (double)plistPanY {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    NSNumber *v = dict[@"userPanY"];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    NSNumber *v = dict[obfN(154)];
     return v ? [v doubleValue] : 0.0;
 }
 
 + (void)setPlistPanY:(double)panY {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"userPanY"] = @(panY);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(154)] = @(panY);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 
 + (double)plistZoom {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    NSNumber *v = dict[@"userZoom"];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    NSNumber *v = dict[obfN(155)];
     return v ? [v doubleValue] : 1.0;  // 缺失时 1.0(原始等比填充)
 }
 
 + (void)setPlistZoom:(double)zoom {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"userZoom"] = @(zoom);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(155)] = @(zoom);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 
 + (void)resetPlistTransform {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"userPanX"] = @0.0;
-    dict[@"userPanY"] = @0.0;
-    dict[@"userZoom"] = @1.0;
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(153)] = @0.0;
+    dict[obfN(154)] = @0.0;
+    dict[obfN(155)] = @1.0;
+    [dict writeToFile:ovf2() atomically:YES];
 }
 
 // 前置方向修正: 前置流显示旋转与后置差 180°, pan 应用时 X/Y 同时取反(设置页开关)
 + (BOOL)plistFrontPanFix {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    return [dict[@"frontPanFix"] boolValue];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    return [dict[obfN(156)] boolValue];
 }
 
 + (void)setPlistFrontPanFix:(BOOL)fix {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"frontPanFix"] = @(fix);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(156)] = @(fix);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 
 #pragma mark - 播放控制（跨进程: 悬浮球写, mediaserverd 轮询应用）
 
 + (BOOL)plistPaused {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    return [dict[@"paused"] boolValue];  // 缺失时 NO(播放中)
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    return [dict[obfN(162)] boolValue];  // 缺失时 NO(播放中)
 }
 
 + (void)setPlistPaused:(BOOL)paused {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"paused"] = @(paused);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(162)] = @(paused);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 
 + (NSInteger)plistRestartToken {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    return [dict[@"restartToken"] integerValue];  // 缺失时 0
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    return [dict[obfN(164)] integerValue];  // 缺失时 0
 }
 
 + (void)bumpRestartToken {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    NSInteger token = [dict[@"restartToken"] integerValue] + 1;
-    dict[@"restartToken"] = @(token);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    NSInteger token = [dict[obfN(164)] integerValue] + 1;
+    dict[obfN(164)] = @(token);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 
 #pragma mark - 三色打光(1.3.37, 跨进程: 悬浮球检测写, mediaserverd 轮询应用)
 
 // 检测颜色高频写(0.1s 节拍且仅变化时): 单键写, 与既有 per-key 模式一致
 + (BOOL)plistLightEnabled {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    return [dict[@"lightEnabled"] boolValue];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    return [dict[obfN(166)] boolValue];
 }
 + (void)setPlistLightEnabled:(BOOL)enabled {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"lightEnabled"] = @(enabled);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(166)] = @(enabled);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 + (uint32_t)plistLightColor {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    return (uint32_t)[dict[@"lightColor"] unsignedIntValue];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    return (uint32_t)[dict[obfN(167)] unsignedIntValue];
 }
 + (void)setPlistLightColor:(uint32_t)color {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"lightColor"] = @(color);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(167)] = @(color);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 + (int)plistLightX {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    NSNumber *v = dict[@"lightX"];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    NSNumber *v = dict[obfN(168)];
     return v ? [v intValue] : 50;
 }
 + (void)setPlistLightX:(int)x {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"lightX"] = @(x);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(168)] = @(x);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 + (int)plistLightY {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    NSNumber *v = dict[@"lightY"];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    NSNumber *v = dict[obfN(169)];
     return v ? [v intValue] : 50;
 }
 + (void)setPlistLightY:(int)y {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"lightY"] = @(y);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(169)] = @(y);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 + (int)plistLightIntensity {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    NSNumber *v = dict[@"lightIntensity"];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    NSNumber *v = dict[obfN(170)];
     return v ? [v intValue] : 30;
 }
 + (void)setPlistLightIntensity:(int)v {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"lightIntensity"] = @(v);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(170)] = @(v);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 + (int)plistLightDiameter {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    NSNumber *v = dict[@"lightDiameter"];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    NSNumber *v = dict[obfN(171)];
     return v ? [v intValue] : 48;
 }
 + (void)setPlistLightDiameter:(int)v {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"lightDiameter"] = @(v);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(171)] = @(v);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 + (int)plistLightFeather {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    NSNumber *v = dict[@"lightFeather"];
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    NSNumber *v = dict[obfN(172)];
     return v ? [v intValue] : 100;
 }
 + (void)setPlistLightFeather:(int)v {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"lightFeather"] = @(v);
-    [dict writeToFile:VCamPlistPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(172)] = @(v);
+    [dict writeToFile:ovf2() atomically:YES];
 }
 
 #pragma mark - 密钥验证(1.3.55, ECDSA P-256 设备绑定签名 / 激活后永久)
@@ -497,14 +498,14 @@ static void vcam_darwin_callback(CFNotificationCenterRef center, void *observer,
 // 到攻击者镜像时 dli_fname 不在信任前缀 → 返回 NULL。调用方随之走"身份值
 // 劣化"路径(静默): 设备码变垃圾/拿不到硬件源 → md 侧验签自然失败。
 // (注: 对内联补丁式 Hook 由 VCamCore 的 IMP 范围自检 + 帧门禁周期重算兜底)
-static void *vcamDlsymTrusted(const char *name) {
+static void *qzDs(const char *name) {
     void *p = dlsym(RTLD_DEFAULT, name);
     if (!p) return NULL;
     Dl_info info;
     if (dladdr(p, &info) == 0 || !info.dli_fname) return NULL;
     const char *fn = info.dli_fname;
-    if (strncmp(fn, "/usr/lib", 8) == 0 || strncmp(fn, "/System", 7) == 0) return p;
-    vcam_notify_log(@"[vcam][lic] untrusted sym src");
+    if (strncmp(fn, OBCS(356), 8) == 0 || strncmp(fn, OBCS(357), 7) == 0) return p;
+    vcam_notify_log(obfN(358));
     return NULL;
 }
 
@@ -514,8 +515,8 @@ static void *vcamSymTrusted(void *p) {
     Dl_info info;
     if (dladdr(p, &info) == 0 || !info.dli_fname) return NULL;
     const char *fn = info.dli_fname;
-    if (strncmp(fn, "/usr/lib", 8) == 0 || strncmp(fn, "/System", 7) == 0) return p;
-    vcam_notify_log(@"[vcam][lic] untrusted sym src");
+    if (strncmp(fn, OBCS(356), 8) == 0 || strncmp(fn, OBCS(357), 7) == 0) return p;
+    vcam_notify_log(obfN(358));
     return NULL;
 }
 
@@ -532,12 +533,12 @@ static void *vcamSecImg(void) {
     static void *img = NULL;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        img = dlopen("/System/Library/Frameworks/Security.framework/Security",
+        img = dlopen(OBCS(359),
                      RTLD_LAZY | RTLD_GLOBAL);
         if (!img) {
             const char *err = dlerror();
             vcam_notify_log([NSString stringWithFormat:
-                @"[vcam][lic] sec img load fail: %s", err ? err : "null"]);
+                obfN(360), err ? err : OBCS(361)]);
         }
     });
     return img;
@@ -559,15 +560,15 @@ static void *vcamScanImagesFor(const char *name) {
     static ImgNameFn nm = NULL;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        cnt = (ImgCountFn)vcamDlsymTrusted("_dyld_image_count");
-        nm  = (ImgNameFn)vcamDlsymTrusted("_dyld_get_image_name");
+        cnt = (ImgCountFn)qzDs(OBCS(362));
+        nm  = (ImgNameFn)qzDs(OBCS(363));
     });
     if (!cnt || !nm) return NULL;
     uint32_t n = cnt();
     for (uint32_t i = 0; i < n; i++) {
         const char *path = nm(i);
         if (!path) continue;
-        if (strncmp(path, "/System", 7) != 0 && strncmp(path, "/usr/lib", 8) != 0) continue;
+        if (strncmp(path, OBCS(357), 7) != 0 && strncmp(path, OBCS(356), 8) != 0) continue;
         void *h = dlopen(path, RTLD_LAZY | RTLD_NOLOAD);
         if (!h) continue;
         void *s = dlsym(h, name);
@@ -599,11 +600,11 @@ static void *vcamSecSymX(void *img, const char *name, int *diag) {
 
 // SHA256(源) 前 8 字节 → 16 位大写 hex NSString(设备码口径, 展示分组由 UI 做)
 typedef unsigned char *(*vcamSHA256Fn)(const void *, unsigned int, unsigned char *);
-static NSString *vcamDigestHex16(NSString *src) {
+static NSString *qzDh(NSString *src) {
     static vcamSHA256Fn sha = NULL;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        sha = (vcamSHA256Fn)vcamDlsymTrusted("CC_SHA256");
+        sha = (vcamSHA256Fn)qzDs(OBCS(364));
     });
     if (!sha || src.length == 0) return nil;
     NSData *d = [src dataUsingEncoding:NSUTF8StringEncoding];
@@ -613,15 +614,15 @@ static NSString *vcamDigestHex16(NSString *src) {
     char hex[17];
     for (int i = 0; i < 8; i++) {
         unsigned char b = md[i];
-        hex[i * 2]     = "0123456789ABCDEF"[b >> 4];
-        hex[i * 2 + 1] = "0123456789ABCDEF"[b & 0xF];
+        hex[i * 2]     = OBCS(365)[b >> 4];
+        hex[i * 2 + 1] = OBCS(365)[b & 0xF];
     }
     hex[16] = 0;
     return [NSString stringWithUTF8String:hex];
 }
 
 // hex 单字符 → 数值(非法返回 -1)
-static int vcamHexDigit(char c) {
+static int qzHx(char c) {
     if (c >= '0' && c <= '9') return c - '0';
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
     if (c >= 'A' && c <= 'F') return c - 'A' + 10;
@@ -630,11 +631,11 @@ static int vcamHexDigit(char c) {
 
 // MobileGestalt(可信任源解析)
 typedef CFStringRef (*vcamMGCopyAnswerFn)(CFStringRef);
-static vcamMGCopyAnswerFn vcamMGResolve(void) {
+static vcamMGCopyAnswerFn qzMg(void) {
     static vcamMGCopyAnswerFn fn = NULL;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        fn = (vcamMGCopyAnswerFn)vcamDlsymTrusted("MGCopyAnswer");
+        fn = (vcamMGCopyAnswerFn)qzDs(OBCS(366));
     });
     return fn;
 }
@@ -642,7 +643,7 @@ static vcamMGCopyAnswerFn vcamMGResolve(void) {
 // IOKit 平台序列号: 与 MobileGestalt 完全独立的第二条身份 API 路径。
 // 类型按框架 ABI 手工声明(iOS 公开 SDK 不带 IOKit 用户头);
 // kIOMasterPortDefault == 0 直传
-static NSString *vcamPlatformSerial(void) {
+static NSString *qzPs(void) {
     static NSString *serial = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
@@ -652,18 +653,18 @@ static NSString *vcamPlatformSerial(void) {
         typedef CFTypeRef (*IORegistryEntryCreateCFPropertyFn)(vcamIOObj, CFStringRef, CFAllocatorRef, uint32_t);
         typedef int (*IOObjectReleaseFn)(vcamIOObj);
         IOServiceMatchingFn matching =
-            (IOServiceMatchingFn)vcamDlsymTrusted("IOServiceMatching");
+            (IOServiceMatchingFn)qzDs(OBCS(367));
         IOServiceGetMatchingServiceFn getsvc =
-            (IOServiceGetMatchingServiceFn)vcamDlsymTrusted("IOServiceGetMatchingService");
+            (IOServiceGetMatchingServiceFn)qzDs(OBCS(368));
         IORegistryEntryCreateCFPropertyFn getprop =
-            (IORegistryEntryCreateCFPropertyFn)vcamDlsymTrusted("IORegistryEntryCreateCFProperty");
+            (IORegistryEntryCreateCFPropertyFn)qzDs(OBCS(369));
         IOObjectReleaseFn release =
-            (IOObjectReleaseFn)vcamDlsymTrusted("IOObjectRelease");
+            (IOObjectReleaseFn)qzDs(OBCS(370));
         if (!matching || !getsvc || !getprop || !release) return;
-        NSString *svc = @"IOPlatformExpertDevice";
+        NSString *svc = obfN(371);
         vcamIOObj entry = getsvc(0, matching([svc UTF8String]));
         if (entry) {
-            CFTypeRef v = getprop(entry, CFSTR("IOPlatformSerialNumber"),
+            CFTypeRef v = getprop(entry, obfCF(372),
                                   kCFAllocatorDefault, 0);
             if (v && CFGetTypeID(v) == CFStringGetTypeID()) {
                 serial = [NSString stringWithString:(__bridge NSString *)v];
@@ -677,15 +678,15 @@ static NSString *vcamPlatformSerial(void) {
 
 // UDID/硬件源不可用时回退: plist 持久 UUID(两进程同读同值; 首次缺省生成并
 // 写回, 原子写双路径与既有 setter 一致)
-+ (NSString *)vcamPersistDeviceUUID {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    NSString *uuid = dict[@"deviceUUID"];
++ (NSString *)qvUu {
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    NSString *uuid = dict[obfN(373)];
     if ([uuid isKindOfClass:[NSString class]] && uuid.length > 0) return uuid;
     uuid = [[NSUUID UUID] UUIDString];
     NSMutableDictionary *mdict = [NSMutableDictionary dictionaryWithDictionary:dict ?: @{}];
-    mdict[@"deviceUUID"] = uuid;
-    [mdict writeToFile:VCamPlistPath atomically:YES];
-    [mdict writeToFile:VCamStateBackupPath atomically:YES];
+    mdict[obfN(373)] = uuid;
+    [mdict writeToFile:ovf2() atomically:YES];
+    [mdict writeToFile:ovf3() atomically:YES];
     return uuid;
 }
 
@@ -694,40 +695,40 @@ static NSString *vcamPlatformSerial(void) {
 // Hook 难以在 SB/md 两进程伪造一致的假身份。硬件源全不可用时回退 plist
 // UUID(仅同机一致, 换机必变)。logEnabled 时打印设备码与源可用性, 用于
 // 跨进程一致性诊断(SB 与 md 必须算出同值, 否则激活在 md 侧不生效)
-+ (NSString *)vcamDeviceCode {
++ (NSString *)qvDc {
     static NSString *code = nil;
     static dispatch_once_t onceToken;
     dispatch_once(&onceToken, ^{
-        NSMutableString *mix = [NSMutableString stringWithString:@"QvD|"];
-        vcamMGCopyAnswerFn mg = vcamMGResolve();
+        NSMutableString *mix = [NSMutableString stringWithString:obfN(374)];
+        vcamMGCopyAnswerFn mg = qzMg();
         BOOL gotHW = NO;
         if (mg) {
-            CFStringRef udid = mg(CFSTR("UniqueDeviceID"));
+            CFStringRef udid = mg(obfCF(375));
             if (udid) {
                 [mix appendString:(__bridge NSString *)udid];
                 CFRelease(udid);
                 gotHW = YES;
             }
-            [mix appendString:@"|S|"];
-            CFStringRef serial = mg(CFSTR("SerialNumber"));
+            [mix appendString:obfN(376)];
+            CFStringRef serial = mg(obfCF(377));
             if (serial) {
                 [mix appendString:(__bridge NSString *)serial];
                 CFRelease(serial);
                 gotHW = YES;
             }
         }
-        [mix appendString:@"|P|"];
-        NSString *platformSerial = vcamPlatformSerial();
+        [mix appendString:obfN(378)];
+        NSString *platformSerial = qzPs();
         if (platformSerial.length > 0) {
             [mix appendString:platformSerial];
             gotHW = YES;
         }
         if (!gotHW) {
-            [mix appendString:[self vcamPersistDeviceUUID]];
+            [mix appendString:[self qvUu]];
         }
-        code = vcamDigestHex16(mix);
+        code = qzDh(mix);
         vcam_notify_log([NSString stringWithFormat:
-            @"[vcam][lic] device code %@ (mg=%d io=%d)",
+            obfN(379),
             code, mg != NULL, platformSerial.length > 0]);
     });
     return code;
@@ -741,11 +742,11 @@ static NSString *vcamPlatformSerial(void) {
 // 公钥 = X9.63 未压缩 65 字节(hex 嵌入, 混淆字符串层加密)。
 // 私钥仅存在于开发机 license_priv.pem, 永不上设备 —— 逆向再彻底也无法
 // 伪造密钥(数学保证, 非混淆保证)
-+ (BOOL)vcamLicenseVerifyBlob:(NSString *)blob {
++ (BOOL)qvVb:(NSString *)blob {
     if (![blob isKindOfClass:[NSString class]]) return NO;
     // 1.3.63 方案A: blob v2 = base64(DER 签名) "." base64(T_enc 72B)。
     // 旧格式(无 "." 段)fail-closed —— 验签消息升级为 设备码||T_enc
-    NSRange dot = [blob rangeOfString:@"."];
+    NSRange dot = [blob rangeOfString:obfN(380)];
     if (dot.location == NSNotFound || dot.location == 0 ||
         dot.location + 1 >= blob.length) return NO;
     NSData *sig = [[NSData alloc] initWithBase64EncodedString:
@@ -760,7 +761,7 @@ static NSString *vcamPlatformSerial(void) {
     if (((const uint8_t *)sig.bytes)[0] != 0x30) return NO;
     // T 表 = 18 × u32(BE) = 72 字节(gen_license.py T_TRUE 布局)
     if (!tEnc || tEnc.length != 72) return NO;
-    NSString *dc = [self vcamDeviceCode];
+    NSString *dc = [self qvDc];
     if (dc.length != 16) return NO;
     // 消息 = 设备码(16 ascii) || T_enc(签名覆盖参数密文, 篡改即验签失败)
     NSMutableData *msg = [NSMutableData dataWithCapacity:16 + 72];
@@ -778,32 +779,32 @@ static NSString *vcamPlatformSerial(void) {
     dispatch_once(&onceToken, ^{
         void *img = vcamSecImg();
         int dg[8];
-        createKey  = (SecKeyCreateWithDataFn)vcamSecSymX(img, "SecKeyCreateWithData", &dg[0]);
-        verifySig  = (SecKeyVerifySignatureFn)vcamSecSymX(img, "SecKeyVerifySignature", &dg[1]);
+        createKey  = (SecKeyCreateWithDataFn)vcamSecSymX(img, OBCS(381), &dg[0]);
+        verifySig  = (SecKeyVerifySignatureFn)vcamSecSymX(img, OBCS(382), &dg[1]);
         // kSecAttr*/kSecKeyAlgorithm* 是 const CFStringRef 指针常量: dlsym 返回的是
         // "存放该指针的变量"的地址, 须再解一层引用(*slot)取真正的 CFStringRef 值。
         // (1.3.55 激活失败设备端根因: 直接把符号地址当 CFStringRef 用 → 属性
         //  字典键全错 → SecKeyCreateWithData 建钥失败 → 验签永远 NO)
         CFStringRef *slot = NULL;
-        slot      = (CFStringRef *)vcamSecSymX(img, "kSecAttrKeyType", &dg[2]);
+        slot      = (CFStringRef *)vcamSecSymX(img, OBCS(383), &dg[2]);
         attrType  = slot ? *slot : NULL;
-        slot      = (CFStringRef *)vcamSecSymX(img, "kSecAttrKeyClass", &dg[3]);
+        slot      = (CFStringRef *)vcamSecSymX(img, OBCS(384), &dg[3]);
         attrClass = slot ? *slot : NULL;
-        slot      = (CFStringRef *)vcamSecSymX(img, "kSecAttrKeySizeInBits", &dg[4]);
+        slot      = (CFStringRef *)vcamSecSymX(img, OBCS(385), &dg[4]);
         attrSize  = slot ? *slot : NULL;
-        slot      = (CFStringRef *)vcamSecSymX(img, "kSecAttrKeyTypeECSECPrimeRandom", &dg[5]);
+        slot      = (CFStringRef *)vcamSecSymX(img, OBCS(386), &dg[5]);
         keyTypeEC = slot ? *slot : NULL;
-        slot      = (CFStringRef *)vcamSecSymX(img, "kSecAttrKeyClassPublic", &dg[6]);
+        slot      = (CFStringRef *)vcamSecSymX(img, OBCS(387), &dg[6]);
         keyClassPub = slot ? *slot : NULL;
-        slot      = (CFStringRef *)vcamSecSymX(img, "kSecKeyAlgorithmECDSASignatureMessageX962SHA256", &dg[7]);
+        slot      = (CFStringRef *)vcamSecSymX(img, OBCS(388), &dg[7]);
         sigAlg    = slot ? *slot : NULL;
         // 单行诊断: img=句柄, d=8 符号各自 0/1/2 (见 vcamSecSymX)
         vcam_notify_log([NSString stringWithFormat:
-            @"[vcam][lic] sec diag img=%d d=%d%d%d%d%d%d%d%d", img != NULL,
+            obfN(389), img != NULL,
             dg[0], dg[1], dg[2], dg[3], dg[4], dg[5], dg[6], dg[7]]);
         if (!createKey || !verifySig || !attrType || !attrClass || !attrSize ||
             !keyTypeEC || !keyClassPub || !sigAlg) {
-            vcam_notify_log(@"[vcam][lic] sec syms missing");
+            vcam_notify_log(obfN(390));
         }
     });
     if (!createKey || !verifySig || !attrType || !attrClass || !attrSize ||
@@ -813,14 +814,14 @@ static NSString *vcamPlatformSerial(void) {
     static NSData *pubKeyData = nil;
     static dispatch_once_t pubOnce;
     dispatch_once(&pubOnce, ^{
-        NSString *pubHex = @"0482aee00557c5ddf34e27610473bb0479272657c0a8c70bc143f21513c704c5c80a26e55916d96d4bd5550a0890f5e23085e40792663841258f3dd9076664ef93";
+        NSString *pubHex = obfN(391);
         if ([pubHex length] != 130) return;
         const char *hex = [pubHex UTF8String];
         NSMutableData *d = [NSMutableData dataWithLength:65];
         uint8_t *b = (uint8_t *)d.mutableBytes;
         for (int i = 0; i < 65; i++) {
-            int hi = vcamHexDigit(hex[i * 2]);
-            int lo = vcamHexDigit(hex[i * 2 + 1]);
+            int hi = qzHx(hex[i * 2]);
+            int lo = qzHx(hex[i * 2 + 1]);
             if (hi < 0 || lo < 0) return;
             b[i] = (uint8_t)((hi << 4) | lo);
         }
@@ -851,7 +852,7 @@ static NSString *vcamPlatformSerial(void) {
     }
     dispatch_once(&verDiagOnce, ^{
         vcam_notify_log([NSString stringWithFormat:
-            @"[vcam][lic] ver diag pub=%lu key=%d sig=%d bl=%lu sl=%lu",
+            obfN(392),
             (unsigned long)pubKeyData.length, keyOK, sigOK,
             (unsigned long)blob.length, (unsigned long)sig.length]);
     });
@@ -860,17 +861,17 @@ static NSString *vcamPlatformSerial(void) {
 
 // 已激活: plist licBlob 对本机设备码验签通过。0.5s 节流缓存(ECDSA ~1ms,
 // 0.15s 轮询全验签无必要; 激活写入后 0.5s 内过期重验, md 下一拍生效)
-+ (BOOL)vcamLicenseValid {
++ (BOOL)qvLv {
     @synchronized ([VCamNotify class]) {
         static BOOL cached = NO;
         static double cachedAt = 0;
         static BOOL hasCache = NO;
         double now = [NSDate timeIntervalSinceReferenceDate];
         if (hasCache && now - cachedAt < 0.5) return cached;
-        NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-        if (!dict) dict = [NSDictionary dictionaryWithContentsOfFile:VCamStateBackupPath];
-        NSString *blob = dict[@"licBlob"];
-        cached = [blob isKindOfClass:[NSString class]] && [self vcamLicenseVerifyBlob:blob];
+        NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+        if (!dict) dict = [NSDictionary dictionaryWithContentsOfFile:ovf3()];
+        NSString *blob = dict[obfN(393)];
+        cached = [blob isKindOfClass:[NSString class]] && [self qvVb:blob];
         cachedAt = now;
         hasCache = YES;
         return cached;
@@ -879,39 +880,39 @@ static NSString *vcamPlatformSerial(void) {
 
 // 激活: 输入密钥(base64, 区分大小写, 仅去空白/换行)验签通过 → 写
 // licBlob/activated/dcPub。mediaserverd 0.15s 轮询下一拍即生效
-+ (BOOL)vcamActivateLicense:(NSString *)input {
++ (BOOL)qvLa:(NSString *)input {
     if (![input isKindOfClass:[NSString class]]) return NO;
     NSString *blob = [[input componentsSeparatedByCharactersInSet:
         [NSCharacterSet whitespaceAndNewlineCharacterSet]]
-        componentsJoinedByString:@""];
-    if (![self vcamLicenseVerifyBlob:blob]) return NO;
+        componentsJoinedByString:obfN(125)];
+    if (![self qvVb:blob]) return NO;
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"licBlob"] = blob;
-    dict[@"activated"] = @YES;
-    dict[@"dcPub"] = [self vcamDeviceCode];
-    [dict writeToFile:VCamPlistPath atomically:YES];
-    [dict writeToFile:VCamStateBackupPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(393)] = blob;
+    dict[obfN(394)] = @YES;
+    dict[obfN(395)] = [self qvDc];
+    [dict writeToFile:ovf2() atomically:YES];
+    [dict writeToFile:ovf3() atomically:YES];
     return YES;
 }
 
 // SB 侧发布本进程设备码(打开激活页/激活成功时调用) → md 侧互证
-+ (void)vcamPublishDeviceCode {
++ (void)qvPd {
     NSMutableDictionary *dict = [NSMutableDictionary dictionaryWithDictionary:
-        [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath] ?: @{}];
-    dict[@"dcPub"] = [self vcamDeviceCode];
-    [dict writeToFile:VCamPlistPath atomically:YES];
-    [dict writeToFile:VCamStateBackupPath atomically:YES];
+        [NSDictionary dictionaryWithContentsOfFile:ovf2()] ?: @{}];
+    dict[obfN(395)] = [self qvDc];
+    [dict writeToFile:ovf2() atomically:YES];
+    [dict writeToFile:ovf3() atomically:YES];
 }
 
 // md 侧跨进程互证: SB 发布的 dcPub 与本机计算值一致(单边被 Hook →
-// 不一致 → VCamCore licMark 关门禁)
-+ (BOOL)vcamCrossDeviceCodeOK {
-    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-    if (!dict) dict = [NSDictionary dictionaryWithContentsOfFile:VCamStateBackupPath];
-    NSString *pub = dict[@"dcPub"];
+// 不一致 → VCamCore lq2 关门禁)
++ (BOOL)qvCc {
+    NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+    if (!dict) dict = [NSDictionary dictionaryWithContentsOfFile:ovf3()];
+    NSString *pub = dict[obfN(395)];
     if (![pub isKindOfClass:[NSString class]] || pub.length != 16) return NO;
-    return [pub isEqualToString:[self vcamDeviceCode]];
+    return [pub isEqualToString:[self qvDc]];
 }
 
 // ===== 1.3.63 方案A: 许可携带功能参数密文(T 表) =====
@@ -934,21 +935,21 @@ static NSString *vcamPlatformSerial(void) {
 // 明文仅在栈上存活微秒级, dump 拿不到连续 72B 明文表。验签每次全跑
 // (~1ms, 消费端均为低频参数读取, 不做结果缓存)。
 // 成功返回 YES 且 outT 为 18×u32(BE 语义值); 失败返回 NO 并擦除。
-+ (BOOL)vcamLicenseDecodeT:(uint32_t *)outT {
++ (BOOL)qvDt:(uint32_t *)outT {
     @synchronized ([VCamNotify class]) {
         if (!outT) return NO;
-        NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:VCamPlistPath];
-        if (!dict) dict = [NSDictionary dictionaryWithContentsOfFile:VCamStateBackupPath];
-        NSString *blob = dict[@"licBlob"];
+        NSDictionary *dict = [NSDictionary dictionaryWithContentsOfFile:ovf2()];
+        if (!dict) dict = [NSDictionary dictionaryWithContentsOfFile:ovf3()];
+        NSString *blob = dict[obfN(393)];
         if (![blob isKindOfClass:[NSString class]] ||
-            ![self vcamLicenseVerifyBlob:blob]) return NO;
+            ![self qvVb:blob]) return NO;
         // 复用验签内部同款解析: sig 段(解 K 不需要) + T_enc 段
-        NSRange dot = [blob rangeOfString:@"."];
+        NSRange dot = [blob rangeOfString:obfN(380)];
         NSData *tEnc = [[NSData alloc] initWithBase64EncodedString:
             [blob substringFromIndex:dot.location + 1]
             options:NSDataBase64DecodingIgnoreUnknownCharacters];
         if (tEnc.length != 72) return NO;
-        NSString *dc = [self vcamDeviceCode];
+        NSString *dc = [self qvDc];
         if (dc.length != 16) return NO;
         NSData *dcData = [dc dataUsingEncoding:NSUTF8StringEncoding];
 
@@ -956,18 +957,18 @@ static NSString *vcamPlatformSerial(void) {
         static vcamSHA256Fn sha = NULL;
         static dispatch_once_t shaOnce;
         dispatch_once(&shaOnce, ^{
-            sha = (vcamSHA256Fn)vcamDlsymTrusted("CC_SHA256");
+            sha = (vcamSHA256Fn)qzDs(OBCS(364));
         });
         if (!sha) return NO;
 
         // T_SALT(构建期盐, hex 32 字符 → 16B; 与 gen_license.py 一致)。
         // 局部变量(非 static): 混淆器把 C 字符串换成运行时解密调用,
         // static const 初始化会因非常量初始化器编译失败(工程既有约束)
-        const char *saltHex = "7ecfba852c100ab4228ac14f062f737c";
+        const char *saltHex = OBCS(396);
         uint8_t salt[16];
         for (int i = 0; i < 16; i++) {
-            int hi = vcamHexDigit(saltHex[i * 2]);
-            int lo = vcamHexDigit(saltHex[i * 2 + 1]);
+            int hi = qzHx(saltHex[i * 2]);
+            int lo = qzHx(saltHex[i * 2 + 1]);
             if (hi < 0 || lo < 0) return NO;
             salt[i] = (uint8_t)((hi << 4) | lo);
         }
@@ -1016,7 +1017,7 @@ static NSString *vcamPlatformSerial(void) {
         uint32_t m0 = outT[0], m17 = outT[17];
         dispatch_once(&tDiagOnce, ^{
             vcam_notify_log([NSString stringWithFormat:
-                @"[vcam][lic] T diag m=%08x c=%08x ok=%d",
+                obfN(397),
                 m0, m17, ok]);
         });
         if (!ok) {
@@ -1029,19 +1030,19 @@ static NSString *vcamPlatformSerial(void) {
 
 // T 表参数取值(u32 → double, ×100 定点): 消费端统一入口。
 // 1.3.78 栈式解码: 不落堆不缓存, 取值后立即擦除(明文只存活于本栈帧)
-+ (double)vcamLicenseTableDouble:(NSUInteger)idx {
++ (double)qvTd:(NSUInteger)idx {
     uint32_t t[18];
     double v = 0.0;
-    if (idx <= 17 && [self vcamLicenseDecodeT:t]) v = (double)t[idx] / 100.0;
+    if (idx <= 17 && [self qvDt:t]) v = (double)t[idx] / 100.0;
     memset(t, 0, sizeof(t));
     return v;
 }
 
 // T 表参数取值(u32 原值): 颜色表/门限等整数参数。同上栈式解码+擦除
-+ (uint32_t)vcamLicenseTableInt:(NSUInteger)idx {
++ (uint32_t)qvTi:(NSUInteger)idx {
     uint32_t t[18];
     uint32_t v = 0;
-    if (idx <= 17 && [self vcamLicenseDecodeT:t]) v = t[idx];
+    if (idx <= 17 && [self qvDt:t]) v = t[idx];
     memset(t, 0, sizeof(t));
     return v;
 }
@@ -1073,12 +1074,12 @@ typedef struct {
     uint32_t pid;
 } VCamPickShm;
 
-static VCamPickShm *vcamPickShmMap(void) {
+static VCamPickShm *qzSm(void) {
     static VCamPickShm *mapped = (VCamPickShm *)MAP_FAILED;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         // 路径字面量(混淆器构建期加密为 OBCS 运行时解密)
-        const char *path = "/var/mobile/Media/DCIM/.vcampick";
+        const char *path = OBCS(398);
         int fd = open(path, O_RDWR | O_CREAT, 0644);
         if (fd < 0) return;
         ftruncate(fd, 4096);
@@ -1104,8 +1105,8 @@ static VCamPickShm *vcamPickShmMap(void) {
 
 // 写端: 采样器(App/SB 进程)调用; slot=色档, color=标准纯色(检测端自带);
 // timestamp 最后写(seqlock 发布点)
-+ (void)vcamPickPublishSlot:(int)slot color:(uint32_t)color count:(int)cnt avg:(uint32_t)avg {
-    VCamPickShm *shm = vcamPickShmMap();
++ (void)qvPb:(int)slot color:(uint32_t)color count:(int)cnt avg:(uint32_t)avg {
+    VCamPickShm *shm = qzSm();
     if (!shm) return;
     __sync_synchronize();
     shm->slot = (uint32_t)MAX(0, MIN(6, slot));
@@ -1119,10 +1120,10 @@ static VCamPickShm *vcamPickShmMap(void) {
 
 // 读端: md 光轮询调用; 返回 YES = 总线新鲜(≤1s 有活跃采样), outColor 直接
 // 是可打光的标准色(检测端已给, md 无需映射); NO = 无采样 → fallback plist。
-+ (BOOL)vcamPickSharedColor:(uint32_t *)outColor count:(int *)outCount {
++ (BOOL)qvRd:(uint32_t *)outColor count:(int *)outCount {
     if (outColor) *outColor = 0;
     if (outCount) *outCount = 0;
-    VCamPickShm *shm = vcamPickShmMap();
+    VCamPickShm *shm = qzSm();
     if (!shm || shm->magic != 0x56435031u) return NO;
     double t1 = shm->ts;
     uint32_t color = shm->color;
@@ -1140,8 +1141,8 @@ static VCamPickShm *vcamPickShmMap(void) {
 // [210,270)蓝 [270,330)紫; V/S 门限 60 / 计票阈值 30(441 像素口径)。
 // 1.3.69 回退原版逻辑(用户指令): 色表/门限全部内置常量, 检测命中直接
 // 返回标准纯色 —— 不再经密钥 T 表中转(SB 端 T 表解密失败导致光永远
-// 不亮的教训)。密钥体系只保留激活门禁(licGate 双变量), 不参与打光参数。
-+ (uint32_t)vcamMatchKnownLightShared:(const uint8_t *)rgba
+// 不亮的教训)。密钥体系只保留激活门禁(lq1 双变量), 不参与打光参数。
++ (uint32_t)qvMk:(const uint8_t *)rgba
                                     n:(int)n
                             outBestIdx:(int *)outBestIdx
                                outCount:(int *)outCount
@@ -1195,13 +1196,13 @@ static VCamPickShm *vcamPickShmMap(void) {
 // notify_post 走 notifyd XPC(公开 API), App 沙盒必放行 —— mmap 直写被
 // 沙盒拒时的兜底。7 固定名(注册无通配): s0=熄灭, s1-s6=色档(匹配档位,
 // 非色值 —— 色值由 SB 中继端查 T 表映射, App 端无需 T 表色值)。
-static NSString *vcamPickSlotName(int slot) {
-    return [NSString stringWithFormat:@"com.vcam.ios.p.s%d", slot];
+static NSString *qzPn(int slot) {
+    return [NSString stringWithFormat:obfN(399), slot];
 }
 
-+ (void)vcamNotifyPickSlot:(int)slot {
++ (void)qvNp:(int)slot {
     if (slot < 0 || slot > 6) return;
-    notify_post([vcamPickSlotName(slot) UTF8String]);
+    notify_post([qzPn(slot) UTF8String]);
 }
 
 // ===== 配置下行(1.3.66: App 沙盒拒读 DCIM plist, cfgRead=0 实锤) =====
@@ -1209,15 +1210,15 @@ static NSString *vcamPickSlotName(int slot) {
 // 坐标(u64: X×10 低 20bit | Y×10 高 44bit), post 触发 App 端回调读取。
 // 全链 notifyd XPC, App 沙盒必放行。
 // 通知名: 开=com.vcam.ios.p.cfg1 关=com.vcam.ios.p.cfg0
-static NSString *vcamPickCfgName(BOOL on) {
-    return on ? @"com.vcam.ios.p.cfg1" : @"com.vcam.ios.p.cfg0";
+static NSString *qzCn(BOOL on) {
+    return on ? obfN(400) : obfN(401);
 }
 
-+ (void)vcamPublishPickCfg:(BOOL)on X:(double)px Y:(double)py {
++ (void)qvPc:(BOOL)on X:(double)px Y:(double)py {
     static int cfgToken = -1;
     static dispatch_once_t once;
     dispatch_once(&once, ^{
-        notify_register_dispatch([vcamPickCfgName(YES) UTF8String],
+        notify_register_dispatch([qzCn(YES) UTF8String],
             &cfgToken, dispatch_get_main_queue(), ^(int t){ (void)t; });
     });
     if (on) {
@@ -1225,12 +1226,12 @@ static NSString *vcamPickCfgName(BOOL on) {
                        | (uint64_t)(uint32_t)lround(py * 10);
         notify_set_state(cfgToken, state);
     }
-    notify_post([vcamPickCfgName(on) UTF8String]);
+    notify_post([qzCn(on) UTF8String]);
 }
 
-// SB 端中继(Tweak.m initializeInSpringBoard 调用): 注册 7 名 → 收到 →
+// SB 端中继(Tweak.m stageInitB 调用): 注册 7 名 → 收到 →
 // 写 mmap 总线(色值由内置表映射, 原版逻辑, 不经 T 表)。App 每拍 post。
-+ (void)vcamStartPickRelay {
++ (void)qvSr {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         static const uint32_t kKnown[7] = {
@@ -1240,15 +1241,15 @@ static NSString *vcamPickCfgName(BOOL on) {
         for (int slot = 0; slot <= 6; slot++) {
             int token = -1;
             int capturedSlot = slot;
-            notify_register_dispatch([vcamPickSlotName(slot) UTF8String], &token,
+            notify_register_dispatch([qzPn(slot) UTF8String], &token,
                 dispatch_get_global_queue(QOS_CLASS_USER_INITIATED, 0),
                 ^(int t) {
                     (void)t;
-                    [VCamNotify vcamPickPublishSlot:capturedSlot
+                    [VCamNotify qvPb:capturedSlot
                         color:kKnown[capturedSlot] count:0 avg:0];
                 });
         }
-        vcam_notify_log(@"[vcam][light] pick relay armed (7 slots, Darwin notify)");
+        vcam_notify_log(obfN(402));
     });
 }
 
@@ -1260,10 +1261,10 @@ typedef CGImageRef (*VcamUICreateScreenImageFn)(void);
 // 1.3.69 原版逻辑回退: 命中档位直接映射内置标准纯色(不经 T 表) —— SB 端
 // T 表解密失败的教训, 检测端自带完整色表, 光色在源头就正确。
 // 1.3.68 遗产: 全屏最强色扫描(无坐标依赖), ≥12% 采样点同档才命中。
-+ (int)vcamAppSampleSlotAtX:(double)px Y:(double)py {
++ (int)qvAp:(double)px Y:(double)py {
     (void)px; (void)py;  // 全屏扫描, 坐标不再使用
     VcamUICreateScreenImageFn capFn =
-        (VcamUICreateScreenImageFn)dlsym(RTLD_DEFAULT, "UICreateScreenImage");
+        (VcamUICreateScreenImageFn)dlsym(RTLD_DEFAULT, OBCS(403));
     if (!capFn) return 0;
     CGImageRef full = capFn();
     if (!full) return 0;
@@ -1360,19 +1361,19 @@ typedef CGImageRef (*VcamUICreateScreenImageFn)(void);
     }
     int outSlot = (sStableSlot >= 0 && sStableSlot <= 6) ? sStableSlot : 0;
     uint32_t outColor = (outSlot >= 1 && outSlot <= 6) ? kKnown[outSlot - 1] : 0;
-    [self vcamPickPublishSlot:outSlot color:outColor count:bestCnt avg:0];
+    [self qvPb:outSlot color:outColor count:bestCnt avg:0];
     // 通道B: Darwin slot 通知 —— 每拍 post(25Hz 心跳): relay 每次收到都写
     // 总线刷新时间戳, 颜色稳定也能保活新鲜度(1s 窗口)
-    [self vcamNotifyPickSlot:outSlot];
+    [self qvNp:outSlot];
     return outSlot;
 }
 
 // App 采样器入口(Tweak.m constructor App 分支调用):
 // 主队列 timer 0.04s → 判 Active(前台才采样) → 后台串行队列采样。
 // 1.3.67 配置改 Darwin cfg 通道: App 沙盒拒读 DCIM plist(cfgRead=0 实锤),
-// SB 端开/关取色时 vcamPublishPickCfg post(开关) + set_state(坐标) →
+// SB 端开/关取色时 qvPc post(开关) + set_state(坐标) →
 // 本端注册 cfgOn/cfgOff 回调更新 static 配置。全链沙盒安全。
-+ (void)vcamStartAppSampler {
++ (void)qvSa {
     static dispatch_once_t once;
     dispatch_once(&once, ^{
         // 配置(Darwin cfg 回调更新; 初始关)
@@ -1383,7 +1384,7 @@ typedef CGImageRef (*VcamUICreateScreenImageFn)(void);
         __block int diagMmap = 0;     // mmap 总线写成功次数
         __block int diagLastSlot = -1;
         int onToken = -1, offToken = -1;
-        notify_register_dispatch([vcamPickCfgName(YES) UTF8String], &onToken,
+        notify_register_dispatch([qzCn(YES) UTF8String], &onToken,
             dispatch_get_main_queue(), ^(int t) {
                 uint64_t state = 0;
                 notify_get_state(onToken, &state);
@@ -1393,13 +1394,13 @@ typedef CGImageRef (*VcamUICreateScreenImageFn)(void);
                 diagCfg++;
                 (void)t;
             });
-        notify_register_dispatch([vcamPickCfgName(NO) UTF8String], &offToken,
+        notify_register_dispatch([qzCn(NO) UTF8String], &offToken,
             dispatch_get_main_queue(), ^(int t) {
                 cfgEn = NO;
                 (void)t;
             });
 
-        dispatch_queue_t sampQ = dispatch_queue_create("com.vcam.samp", NULL);
+        dispatch_queue_t sampQ = dispatch_queue_create(OBCS(404), NULL);
         dispatch_source_t timer = dispatch_source_create(
             DISPATCH_SOURCE_TYPE_TIMER, 0, 0, dispatch_get_main_queue());
         // 1.3.77 降频 25→12.5Hz(发热根修): UICreateScreenImage 全屏捕获 +
@@ -1414,9 +1415,9 @@ typedef CGImageRef (*VcamUICreateScreenImageFn)(void);
             if (!app || app.applicationState != UIApplicationStateActive) return;
             if (!cfgEn) return;
             dispatch_async(sampQ, ^{
-                diagLastSlot = [self vcamAppSampleSlotAtX:cfgPx Y:cfgPy];
+                diagLastSlot = [self qvAp:cfgPx Y:cfgPy];
                 diagSamp++;
-                if (vcamPickShmMap() != NULL) diagMmap++;
+                if (qzSm() != NULL) diagMmap++;
             });
         });
         dispatch_resume(timer);
@@ -1428,9 +1429,9 @@ typedef CGImageRef (*VcamUICreateScreenImageFn)(void);
                 [NSThread sleepForTimeInterval:5.0];
                 @try {
                     NSString *dp = [NSTemporaryDirectory()
-                        stringByAppendingPathComponent:@"vcampick_diag.txt"];
+                        stringByAppendingPathComponent:obfN(405)];
                     NSString *line = [NSString stringWithFormat:
-                        @"[%@] cfg=%d samp=%d mmap=%d lastSlot=%d px=%.0f py=%.0f pid=%d\n",
+                        obfN(406),
                         [NSDate date], diagCfg, diagSamp,
                         diagMmap, diagLastSlot, cfgPx, cfgPy, getpid()];
                     [line writeToFile:dp atomically:YES
@@ -1438,7 +1439,7 @@ typedef CGImageRef (*VcamUICreateScreenImageFn)(void);
                 } @catch (NSException *e) {}
             }
         });
-        vcam_notify_log(@"[vcam][light] app sampler started (Darwin cfg + UICSI + slot bus)");
+        vcam_notify_log(obfN(407));
     });
 }
 
