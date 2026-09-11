@@ -1,0 +1,125 @@
+name: Build iOS Tweak DEB
+
+on:
+  push:
+    tags:
+      - 'v*'          # 推送 v1.0.0 等标签触发
+      - 'release/*'   # 推送 release/* 分支触发
+  workflow_dispatch:  # 手动触发
+
+permissions:
+  contents: write     # 创建 Release 需要
+  packages: write     # 上传产物需要
+
+jobs:
+  build-deb:
+    name: Build DEB (macOS)
+    runs-on: macos-latest
+    timeout-minutes: 30
+    
+    env:
+      THEOS: /opt/theos
+      FINALPACKAGE: 1
+      
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 0  # 需要完整历史给 gen_obf_src.py
+      
+      - name: Install Theos
+        run: |
+          git clone --recursive https://github.com/theos/theos.git ${{ env.THEOS }}
+          echo "${{ env.THEOS }}/bin" >> $GITHUB_PATH
+          echo "THEOS=${{ env.THEOS }}" >> $GITHUB_ENV
+      
+      - name: Install dependencies
+        run: |
+          brew update
+          brew install ldid dpkg
+          # 验证安装
+          which make ldid dpkg-deb
+      
+      - name: Setup Python for gen_obf_src.py
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      
+      - name: Install Python deps
+        run: |
+          pip install cryptography
+      
+      - name: Generate obfuscated sources
+        run: |
+          python gen_obf_src.py
+          echo "obfsrc generated: $(ls obfsrc/*.m | wc -l) files"
+      
+      - name: Build DEB package
+        run: |
+          make clean
+          make FINALPACKAGE=1
+        env:
+          THEOS: ${{ env.THEOS }}
+          FINALPACKAGE: 1
+      
+      - name: Verify DEB
+        run: |
+          ls -la packages/
+          dpkg-deb -I packages/*.deb
+          dpkg-deb -c packages/*.deb
+      
+      - name: Extract version from DEB
+        id: version
+        run: |
+          DEB_FILE=$(ls packages/*.deb | head -1)
+          VERSION=$(dpkg-deb -f "$DEB_FILE" Version)
+          PACKAGE=$(dpkg-deb -f "$DEB_FILE" Package)
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "package=$PACKAGE" >> $GITHUB_OUTPUT
+          echo "deb_file=$DEB_FILE" >> $GITHUB_OUTPUT
+      
+      - name: Create Release
+        uses: softprops/action-gh-release@v1
+        if: startsWith(github.ref, 'refs/tags/')
+        with:
+          name: VCamPlus ${{ steps.version.outputs.version }}
+          tag_name: ${{ github.ref_name }}
+          files: ${{ steps.version.outputs.deb_file }}
+          generate_release_notes: true
+          draft: false
+          prerelease: false
+      
+      - name: Upload DEB as Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: vcam-plus-deb-${{ steps.version.outputs.version }}
+          path: packages/*.deb
+          retention-days: 30
+      
+      - name: Upload build info
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-info-${{ steps.version.outputs.version }}
+          path: |
+            build_info.txt
+            DELIVERY_REPORT.md
+          retention-days: 30
+
+  # 可选：推送到包仓库（如 apt. repo）
+  deploy-apt:
+    name: Deploy to APT Repo
+    needs: build-deb
+    if: github.event_name == 'push' && startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download DEB
+        uses: actions/download-artifact@v4
+        with:
+          name: vcam-plus-deb-${{ needs.build-deb.outputs.version }}
+      
+      - name: Deploy to GitHub Packages (示例)
+        run: |
+          # 如果配置了 apt 仓库，可在此推送
+          # 示例：上传到 GitHub Packages / 自建 apt 服务器
+          echo "DEB ready for manual deploy: $(ls *.deb)"
