@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <notify.h>
+#include <CommonCrypto/CommonCrypto.h>
 
 NSString *const VCamNotifyReloadMedia = @"com.vcam.ios.media.reload";
 NSString *const VCamNotifyLiveChanged = @"com.vcam.ios.live.changed";
@@ -793,63 +794,11 @@ static const int gVPMLicenseSecretLen = 32;
     if (planId == 2) return @"month";
     return @"forever";
 }
-        for (int i = 0; i < 65; i++) {
-            int hi = vcamHexDigit(hex[i * 2]);
-            int lo = vcamHexDigit(hex[i * 2 + 1]);
-            if (hi < 0 || lo < 0) return;
-            b[i] = (uint8_t)((hi << 4) | lo);
-        }
-        pubKeyData = [d copy];
-    });
-    // 1.3.61 验签链路逐环诊断(每进程一次): 1.3.60 设备实测 d=22222222
-    // (8 符号全解出)后仍无 state change → 失败点在符号解析之后的静默
-    // return。pub=公钥字节数(65 正常, 0=hex 解码失败) key=SecKey 建钥
-    // 结果 sig=验签结果 bl/sl=blob 字符数与 DER 字节数
-    static dispatch_once_t verDiagOnce;
-    BOOL keyOK = NO, sigOK = NO;
-    if (pubKeyData.length == 65) {
-        int bits = 256;
-        CFNumberRef sizeNum = CFNumberCreate(NULL, kCFNumberIntType, &bits);
-        const void *dk[3] = { attrType, attrClass, attrSize };
-        const void *dv[3] = { keyTypeEC, keyClassPub, sizeNum };
-        CFDictionaryRef attrs = CFDictionaryCreate(NULL, dk, dv, 3,
-            &kCFTypeDictionaryKeyCallBacks, &kCFTypeDictionaryValueCallBacks);
-        CFTypeRef key = attrs ? createKey((__bridge CFDataRef)pubKeyData, attrs, NULL) : NULL;
-        if (attrs) CFRelease(attrs);
-        if (sizeNum) CFRelease(sizeNum);
-        keyOK = key != NULL;
-        if (key) {
-            sigOK = verifySig(key, sigAlg,
-                              (__bridge CFDataRef)msgData, (__bridge CFDataRef)sig, NULL);
-            CFRelease(key);
-        }
-    }
-    dispatch_once(&verDiagOnce, ^{
-        vcam_notify_log([NSString stringWithFormat:
-            @"[vcam][lic] ver diag pub=%lu key=%d sig=%d bl=%lu sl=%lu",
-            (unsigned long)pubKeyData.length, keyOK, sigOK,
-            (unsigned long)blob.length, (unsigned long)sig.length]);
-    });
-    return sigOK;
-}
 
-// 提取 blob 中的计划类型 (HMAC 格式: 16 hex chars)
-// 返回 plan 字符串: hour/day/month/forever，失败返回 nil
-+ (NSString *)vcamLicensePlanFromBlob:(NSString *)blob {
-    if (![blob isKindOfClass:[NSString class]]) return nil;
-    NSMutableString *hx = [blob.uppercaseString mutableCopy];
-    [hx replaceOccurrencesOfString:@"-" withString:@"" options:0 range:NSMakeRange(0, hx.length)];
-    [hx replaceCharactersInRange:NSMakeRange(0, hx.length) withString:[hx stringByTrimmingCharactersInSet:[NSCharacterSet whitespaceAndNewlineCharacterSet]]];
-    if (hx.length != 16) return nil;
-    uint8_t planId = 0;
-    unsigned int v = 0;
-    [[NSScanner scannerWithString:[hx substringWithRange:NSMakeRange(0, 2)]] scanHexInt:&v];
-    planId = (uint8_t)v;
-    if (planId > 3) return nil;
-    if (planId == 0) return @"hour";
-    if (planId == 1) return @"day";
-    if (planId == 2) return @"month";
-    return @"forever";
+// 提取 blob 中的过期信息 (HMAC 格式无过期信息段，返回 nil)
+// 保留此方法签名以兼容旧版本调用
++ (NSDictionary *)vcamLicenseExpiryInfoFromBlob:(NSString *)blob {
+    return nil; // HMAC 格式无过期信息段
 }
 
 // 检查许可证是否过期 (基于激活时间 + 计划类型)

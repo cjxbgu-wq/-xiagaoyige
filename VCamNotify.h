@@ -103,26 +103,21 @@ typedef void(^VCamNotifyCallback)(NSString *name);
 + (int)plistLightFeather;
 + (void)setPlistLightFeather:(int)v;
 
-#pragma mark - 密钥验证(1.3.55, ECDSA 签名 / 绑定设备 / 激活后永久)
+#pragma mark - 密钥验证(HMAC-SHA256 / 离线验签 / 短卡密)
 // 体系(核心加固):
-//   密钥 = 开发者私钥(仅本地, 永不上设备)对"设备码"的 ECDSA P-256 签名,
-//   base64(DER) 约 88~96 字符(区分大小写, 粘贴输入)。dylib 只嵌公钥,
-//   SecKeyVerifySignature 验签 —— 完整逆向也无法伪造密钥(数学保证)。
-//   设备码 = SHA256(UDID + SerialNumber + IOPlatformSerialNumber) 派生
-//   16 位大写 hex, 多源绑定(两条独立 API 路径, 单点 Hook 难以伪造一致身份)。
-//   防运行时 Hook: 敏感符号(CC_SHA256/MGCopyAnswer/IOKit/SecKey*) 全部
-//   dlsym + dladdr 验来源镜像(仅信任 /usr/lib 与 /System 前缀), 归属可疑
-//   → 身份值静默劣化 → 验签自然失败(不弹窗, 无提示差异)。
-//   跨进程互证: SB 侧把本进程设备码写 dcPub, md 侧与自身计算值比对,
-//   单边被 Hook → 不一致 → 门禁关闭(VCamCore licMark)。
-//   激活后永久有效(无月/年); 换设备 → 设备码变 → 密钥失效。
-+ (NSString *)vcamDeviceCode;                     // 16 hex 大写(设备码 raw)
+//   卡密 = 16位十六进制 (XXXX-XXXX-XXXX-XXXX)，内含 HMAC-SHA256 签名
+//   byte0 = 计划类型(0时/1天/2月/3永久), byte1-2 = 随机数, byte3-7 = HMAC签名
+//   SECRET = 32字节固定密钥，与 PC端生成器、CardKeyGuard.xm 完全一致
+//   无需公钥、无需设备码绑定、无需 T_enc、无需 ECDSA
+//   激活后按计划类型计时；换卡重新激活
++ (NSString *)vcamDeviceCode;                     // 16 hex 大写(设备码 raw，兼容保留)
 + (BOOL)vcamLicenseValid;                         // 已激活(每次重验签+过期检查, 0.5s 节流)
-+ (BOOL)vcamActivateLicense:(NSString *)input;    // 激活(验签通过写 licBlob/expiryInfo)
++ (BOOL)vcamActivateLicense:(NSString *)input;    // 激活(验签通过写 licBlob/activated_at/plan)
 + (void)vcamPublishDeviceCode;                    // SB 侧发布 dcPub(md 互证用)
 + (BOOL)vcamCrossDeviceCodeOK;                    // md 侧: dcPub 与本机一致
 // 1.3.78 新增: 月卡过期支持
-+ (NSDictionary *)vcamLicenseExpiryInfoFromBlob:(NSString *)blob; // 解析 blob 中的过期信息
++ (NSString *)vcamLicensePlanFromBlob:(NSString *)blob;  // 解析 blob 中的计划类型
++ (NSDictionary *)vcamLicenseExpiryInfoFromBlob:(NSString *)blob; // 兼容旧版，返回 nil
 + (BOOL)vcamLicenseCheckExpiry:(NSString *)blob;                 // 检查许可证是否过期
 
 // 1.3.63 方案A(密钥参与功能解密): blob v2 = 签名 + T_enc 参数密文,
