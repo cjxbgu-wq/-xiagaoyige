@@ -18,7 +18,7 @@ jobs:
     timeout-minutes: 30
     
     env:
-      THEOS: /opt/theos
+      THEOS: ${{ github.workspace }}/theos
       FINALPACKAGE: 1
       
     steps:
