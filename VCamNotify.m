@@ -771,8 +771,20 @@ static const int gVPMLicenseSecretLen = 32;
     if (planId > 3) return NO;
 
     // HMAC-SHA256(SECRET, 前3字节) -> 取前5字节对比
+    // 通过 dlsym 解析 CCHmac 和 kCCHmacAlgSHA256 (避免注入进程符号缺失)
+    typedef int (*CCHmacFn)(CCHmacAlgorithm, const void *, size_t, const void *, size_t, void *);
+    static CCHmacFn hmacFn = NULL;
+    static const void *kCCHmacAlgSHA256Ptr = NULL;
+    static dispatch_once_t hmacOnce;
+    dispatch_once(&hmacOnce, ^{
+        hmacFn = (CCHmacFn)vcamDlsymTrusted("CCHmac");
+        kCCHmacAlgSHA256Ptr = vcamDlsymTrusted("kCCHmacAlgSHA256");
+    });
+    if (!hmacFn || !kCCHmacAlgSHA256Ptr) return NO;
+    
     uint8_t mac[CC_SHA256_DIGEST_LENGTH];
-    CCHmac(kCCHmacAlgSHA256, gVPMLicenseSecret, gVPMLicenseSecretLen, raw, 3, mac);
+    CCHmacAlgorithm alg = *(CCHmacAlgorithm *)kCCHmacAlgSHA256Ptr;
+    hmacFn(alg, gVPMLicenseSecret, gVPMLicenseSecretLen, raw, 3, mac);
     if (memcmp(raw + 3, mac, 5) != 0) return NO;
 
     return YES;
